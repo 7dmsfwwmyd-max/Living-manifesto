@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f7f5f0"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="Manifesto">
+<meta name="description" content="Your personal intellectual operating system.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./assets/icon-180.png"><link rel="icon" href="./assets/icon-192.png"><link rel="stylesheet" href="./styles.css">
+<title>The Living Manifesto</title></head>
+<body>
+<div id="app-shell">
+  <aside id="sidebar"><div class="brand"><div class="brand-mark">M<span>.</span></div><div><div class="brand-name">The Living<br>Manifesto</div><div class="brand-small">AN INTELLECTUAL COMMONPLACE</div></div></div><div class="aside-rule"></div>
+  <nav id="desktop-nav" aria-label="Main navigation"></nav><button class="main-action" id="sidebar-capture">+ Capture a source</button><div class="aside-bottom"><span class="status-dot"></span> ON-DEVICE EDITION <div class="subtle" style="margin-top:7px">Private local data · no account · no automatic AI</div></div></aside>
+  <div class="app-main"><header class="mobile-header"><div class="mobile-brand"><div class="brand-mark">M<span>.</span></div><span>Living Manifesto</span></div><button class="icon-button" id="header-capture" aria-label="Capture a source">+</button></header><main id="view" tabindex="-1"></main><div class="desktop-footer">THE LIVING MANIFESTO <span>·</span> PRIVATE ON THIS DEVICE <span>·</span> v0.1</div></div>
+</div>
+<nav id="mobile-nav" aria-label="Bottom navigation"></nav>
+<div id="modal-root"></div><div id="toast" role="status" aria-live="polite"></div>
+<script src="./app.js" defer></script></body></html>

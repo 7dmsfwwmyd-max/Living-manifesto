@@ -1,0 +1,14 @@
+
+{
+  "name": "living-manifesto-app",
+  "main": "dist/_worker.js",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "dist",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "build": {
+    "command": "node deploy.mjs && printf '_worker.js\\n_headers\\n' > dist/.assetsignore"
+  }
+}

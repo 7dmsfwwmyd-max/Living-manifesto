@@ -1,4 +1,3 @@
-
 {
   "name": "living-manifesto-app",
   "main": "dist/_worker.js",
@@ -8,14 +7,17 @@
     "binding": "ASSETS",
     "run_worker_first": true
   },
-  "build": {
-    "command": "node deploy.mjs && printf '_worker.js\\n_headers\\n' > dist/.assetsignore"
-  },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "living-manifesto",
       "database_id": "39259550-5d35-4d51-aaee-f203d33af1c9"
     }
-  ]
+  ],
+  "ai": {
+    "binding": "CONVERTER"
+  },
+  "build": {
+    "command": "node deploy.mjs && printf '_worker.js\\n_headers\\n' > dist/.assetsignore"
+  }
 }

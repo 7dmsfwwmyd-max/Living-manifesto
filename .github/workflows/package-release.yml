@@ -8,6 +8,9 @@ on:
       - 'understand-patch.mjs'
       - 'integrated-learning-patch.mjs'
   workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
 jobs:
   package:
     runs-on: ubuntu-latest
@@ -18,7 +21,8 @@ jobs:
           node-version: '22'
       - name: Build deployment directory
         run: |
-          node deploy.mjs
+          node deploy.mjs 2>&1 | tee /tmp/manifesto-build.log
+          test ${PIPESTATUS[0]} -eq 0
           printf '_worker.js\n_headers\n' > dist/.assetsignore
           node --check dist/_worker.js
           node --check dist/app.js
@@ -29,6 +33,13 @@ jobs:
           grep -q "version:'0.5.1'" dist/_worker.js
           grep -q "version:'0.5.1'" dist/_worker.js
           test -f dist/_headers
+      - name: Report failed build for automated diagnosis
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo 'Commit: ${{ github.sha }}'; echo; echo 'Build output:'; cat /tmp/manifesto-build.log 2>/dev/null || true; } > /tmp/manifesto-diagnostic.txt
+          gh issue create --title 'Automated build diagnostic' --body-file /tmp/manifesto-diagnostic.txt || true
       - name: Package deployable files
         run: |
           cd dist

@@ -27,6 +27,7 @@ jobs:
           printf '_worker.js\n_headers\n' > dist/.assetsignore
           node --check dist/_worker.js
           node --check dist/app.js
+          node -e "const fs=require('fs');const w=fs.readFileSync('dist/_worker.js','utf8');const a=fs.readFileSync('dist/app.js','utf8');if(!w.includes('learning-dossier')||!w.includes('researchDossier(req,env')||!a.includes('Generate deep dive in app'))process.exit(1);console.log('Integrated learning route and UI smoke checks passed')"
           grep -q 'deepPrompt' dist/app.js
           grep -q 'deepView' dist/app.js
           grep -q 'researchDossier' dist/_worker.js

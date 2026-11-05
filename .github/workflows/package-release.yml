@@ -1,0 +1,33 @@
+name: Package Living Manifesto v0.4.8
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/package-release.yml'
+      - 'deploy.mjs'
+  workflow_dispatch:
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build deployment directory
+        run: |
+          node deploy.mjs
+          printf '_worker.js\n_headers\n' > dist/.assetsignore
+          node --check dist/_worker.js
+          node --check dist/app.js
+          grep -q "version:'0.4.8'" dist/_worker.js
+          test -f dist/_headers
+      - name: Package deployable files
+        run: |
+          cd dist
+          zip -qr ../living-manifesto-v0.4.8-cloudflare.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: living-manifesto-v0.4.8-cloudflare
+          path: living-manifesto-v0.4.8-cloudflare.zip
+          retention-days: 30

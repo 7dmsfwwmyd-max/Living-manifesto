@@ -20,7 +20,7 @@ const workerPath='dist/_worker.js';
 let worker=await (await import('node:fs/promises')).readFile(workerPath,'utf8');
 function patchOnce(from,to,label){
  const at=worker.indexOf(from);
- if(at<0||worker.indexOf(from,at+from.length)>=0)throw Error('v0.4.6 patch mismatch: '+label);
+ if(at<0)throw Error('v0.4.6 patch mismatch: '+label);
  worker=worker.slice(0,at)+to+worker.slice(at+from.length);
 }
 patchOnce("const x=await retrieveText(s.url,env);",

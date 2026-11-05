@@ -72,3 +72,6 @@ console.log('Living Manifesto v0.4.8 Cloudflare-compatible redirects prepared');
 
 // Add optional Understand learning workspace without changing the backend or D1 schema.
 await import('./understand-patch.mjs');
+
+// Optional authenticated in-app Deep dive generation; ingestion remains unchanged.
+await import('./integrated-learning-patch.mjs');

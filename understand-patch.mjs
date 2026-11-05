@@ -18,9 +18,15 @@ function learnPrompt(s,term){return 'Teach me '+term+' from first principles in 
 function understand(s){const found=learnTerms(s);if(!found.some(t=>t.name===learn.term))learn.term=found[0].name;const t=terms.find(x=>x.name===learn.term);let known=[];try{known=JSON.parse(localStorage.getItem('lm-understood-v1')||'[]')}catch{}return '<article class="card"><div class="section-label">First-principles learning</div><p class="small muted">Select a concept. These are curated explanations, not claims about the author’s precise meaning.</p><div class="actions">'+found.map(x=>'<button class="btn small '+(x.name===t.name?'primary':'')+'" data-learn-term="'+esc(x.name)+'">'+esc(x.name)+(known.includes(x.name)?' ✓':'')+'</button>').join('')+'</div><h2>'+esc(t.name)+'</h2><div class="actions"><button class="btn small" data-learn-level="simple">Simple</button><button class="btn small" data-learn-level="technical">Technical</button></div><p>'+esc(t[learn.level])+'</p><div class="section-label">Example</div><p>'+esc(t.example)+'</p><div class="section-label">Limitation</div><p>'+esc(t.limit)+'</p><div class="section-label">Foundational reading</div>'+t.reads.map(r=>'<p><a target="_blank" rel="noopener noreferrer" href="'+esc(r[1])+'">'+esc(r[0])+' ↗</a></p>').join('')+'<div class="actions"><button class="btn small" data-learn-mark="'+esc(t.name)+'">'+(known.includes(t.name)?'Mark not understood':'Mark understood')+'</button><button class="btn primary small" data-learn-copy="'+esc(t.name)+'">Copy deeper learning prompt</button></div><p class="small muted">Progress is saved on this device only. The copied prompt can be pasted into ChatGPT for an article-specific explanation.</p></article>'}
 `;
 app=app.replace(anchor,anchor+'\n'+feature);
+const detailAnchor="if(!s)return \`<div class=\"content\">";
+check(detailAnchor);
+app=app.replace(detailAnchor,"if(!s)return \`<div class=\"content\">");
+const branch="function detail(){const d=state.detail,s=d?.source;";
+check(branch);
+app=app.replace(branch,branch+"if(s&&learn.tab==='understand')return '<button class=\"back\" data-action=\"back\">← Back to Library</button><div class=\"actions\" style=\"margin:18px 0\"><button class=\"btn small\" data-learn-tab=\"analysis\">Analysis</button><button class=\"btn primary small\" data-learn-tab=\"understand\">Understand</button></div>'+understand(s);");
 const start="<h2 class=\"section-title\">Extracted ideas</h2>";
 check(start);
-app=app.replace(start,"<div class=\"actions\" style=\"margin:18px 0\"><button class=\"btn small ${learn.tab==='analysis'?'primary':''}\" data-learn-tab=\"analysis\">Analysis</button><button class=\"btn small ${learn.tab==='understand'?'primary':''}\" data-learn-tab=\"understand\">Understand</button></div>${learn.tab==='understand'?understand(s):`"+start);
+app=app.replace(start,"<div class=\"actions\" style=\"margin:18px 0\"><button class=\"btn primary small\" data-learn-tab=\"analysis\">Analysis</button><button class=\"btn small\" data-learn-tab=\"understand\">Understand</button></div>"+start);
 const event="const n=e.target.closest('[data-nav],[data-action],[data-source],[data-filter],[data-decide],[data-edit-belief]');if(!n)return;";
 check(event);
 const handlers=`

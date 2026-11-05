@@ -18,6 +18,6 @@
     "binding": "CONVERTER"
   },
   "build": {
-    "command": "node deploy.mjs && printf '_worker.js\\n_headers\\n' > dist/.assetsignore"
+    "command": "node deploy.mjs && node --check dist/_worker.js && node --check dist/app.js && node verify-release.mjs && printf '_worker.js\\n_headers\\n' > dist/.assetsignore"
   }
 }

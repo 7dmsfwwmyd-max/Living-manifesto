@@ -29,5 +29,34 @@ patchOnce("const x=await retrieveText(s.url,env);",
 patchOnce("if(!articleUrl&&full.length>=40)","if(!articleUrl&&full.length>=1)","short X posts");
 worker=worker.replaceAll("version:'0.4.5'","version:'0.4.6'");
 await (await import('node:fs/promises')).writeFile(workerPath,worker);
-console.log('Living Manifesto v0.4.6 prepared');
+
+function patchAll(from,to,label){
+ if(!worker.includes(from))throw Error('v0.4.7 patch mismatch: '+label);
+ worker=worker.split(from).join(to);
+}
+// Accept PDFs identified by their actual %PDF header, even when a server
+// mislabels the MIME type as text/html or text/plain.
+patchOnce("const actualPdf=pdf||(binary&&data.length>=5&&String.fromCharCode(...data.slice(0,5))==='%PDF-');",
+"const actualPdf=pdf||(data.length>=5&&String.fromCharCode(...data.slice(0,5))==='%PDF-');",
+"PDF signature recognition");
+// Some providers use application/x-pdf or application/force-download.
+patchOnce("const pdf=ctype.includes('application/pdf')||(/\\.pdf$/i.test(new URL(current).pathname)&&binary);",
+"const pdf=ctype.includes('application/pdf')||ctype.includes('application/x-pdf')||(/\\.pdf$/i.test(new URL(current).pathname)&&binary);",
+"PDF MIME variants");
+patchOnce("if(!pdf&&!html&&!plain&&!binary)throw Error('This source format is not yet supported. HTML, plain text and standard PDFs are supported.');",
+"if(!pdf&&!html&&!plain&&!binary)throw Error('This source format is not yet supported. HTML, plain text and standard PDFs are supported.');",
+"PDF type guard");
+patchOnce("if(text.length<150)throw Error('PDF contains insufficient selectable text; scanned documents need OCR or supplied text');",
+"if(text.length<40)throw Error('PDF conversion returned too little readable text; scanned or image-only PDFs may require OCR');",
+"PDF text threshold");
+patchOnce("if(body.length<150)return failure('Unable to retrieve sufficient readable text from this source');",
+"if(body.length<40)return failure('Unable to retrieve sufficient readable text from this source');",
+"Shortcut PDF text threshold");
+patchOnce("if(body.length>=40){\n  if(url&&!title&&info.kind==='pdf_link')",
+"if(body.length>=40){\n  if(url&&!title&&info.kind==='pdf_link')",
+"intake invariant");
+patchAll("version:'0.4.6'","version:'0.4.7'","health version");
+await (await import('node:fs/promises')).writeFile(workerPath,worker);
+console.log('Living Manifesto v0.4.7 PDF and X ingestion corrections prepared');
+
 

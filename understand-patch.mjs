@@ -1,0 +1,36 @@
+import {readFile,writeFile} from 'node:fs/promises';
+let app=await readFile('dist/app.js','utf8');
+const check=(a)=>{if(!app.includes(a))throw Error('Understand patch mismatch: '+a.slice(0,60))};
+const anchor="const app=document.getElementById('app');";
+check(anchor);
+const feature=`
+const learn={tab:'analysis',term:'Loop',level:'simple'};
+const terms=[
+{name:'Loop',re:/\\bloops?\\b/i,simple:'A cycle that repeats: act, check the result, and try again or stop.',technical:'An iterative process with execution, feedback, evaluation and a stopping condition.',example:'An AI writes code, runs tests and revises when a test fails.',limit:'A loop is only as reliable as its checks.',reads:[['Feedback Systems — Åström & Murray','https://fbsbook.org/']]},
+{name:'Graph',re:/\\bgraphs?\\b|\\bdependencies\\b/i,simple:'A map of tasks and their relationships, showing what depends on what.',technical:'Nodes connected by edges; a directed acyclic graph can represent task dependencies.',example:'Research → implementation → testing → deployment.',limit:'A task graph coordinates work but cannot guarantee its quality.',reads:[['Introduction to Algorithms — Cormen et al.','https://mitpress.mit.edu/9780262046305/introduction-to-algorithms/']]},
+{name:'Feedback',re:/\\bfeedback\\b/i,simple:'Information about the outcome of an action that helps decide what to do next.',technical:'A measured system output returned to a controller to adjust subsequent actions.',example:'A thermostat measures temperature and adjusts heating.',limit:'Noisy or delayed feedback can be misleading.',reads:[['Feedback Systems — Åström & Murray','https://fbsbook.org/']]},
+{name:'Verification',re:/\\bverif|\\btests?\\b/i,simple:'Checking a result against a clear standard instead of assuming it is correct.',technical:'Evaluation against explicit acceptance criteria, tests or invariants.',example:'A unit test checks a calculation against an expected result.',limit:'Tests only verify the cases they actually cover.',reads:[['The Pragmatic Programmer — Hunt & Thomas','https://pragprog.com/titles/tpp20/the-pragmatic-programmer-20th-anniversary-edition/']]},
+{name:'Agent',re:/\\bagents?\\b/i,simple:'A system that takes a series of actions toward a goal rather than only answering one question.',technical:'A goal-directed system that observes state, chooses actions and uses tools.',example:'An assistant researches options, compares them and prepares a report.',limit:'Autonomy is not evidence of accuracy.',reads:[['Artificial Intelligence: A Modern Approach — Russell & Norvig','https://aima.cs.berkeley.edu/']]},
+{name:'Context',re:/\\bcontext\\b|\\bprompt\\b/i,simple:'The information and instructions available to an AI when it answers.',technical:'The input tokens and retrieved materials available during model inference.',example:'A supplied contract gives context for analysing a clause.',limit:'Irrelevant context can distract or mislead.',reads:[['Attention Is All You Need — Vaswani et al.','https://arxiv.org/abs/1706.03762']]}
+];
+function learnTerms(s){const text=[s.title,s.summary,s.question,s.body].filter(Boolean).join(' ').slice(0,60000);const found=terms.filter(t=>t.re.test(text));return found.length?found:terms.slice(0,4)}
+function learnPrompt(s,term){return 'Teach me '+term+' from first principles in the context of this article. Start with a plain-English analogy, then a technical explanation, historical context, limitations and three foundational readings with verifiable links. Distinguish the author’s claims from your interpretation. Never invent source quotations. Ask three comprehension questions.\\nTITLE: '+(s.title||'Untitled')+'\\nSUMMARY: '+(s.summary||'Unavailable')+'\\nSOURCE TEXT (possibly partial):\\n'+String(s.body||'[Source text unavailable]').slice(0,16000)}
+function understand(s){const found=learnTerms(s);if(!found.some(t=>t.name===learn.term))learn.term=found[0].name;const t=terms.find(x=>x.name===learn.term);let known=[];try{known=JSON.parse(localStorage.getItem('lm-understood-v1')||'[]')}catch{}return '<article class="card"><div class="section-label">First-principles learning</div><p class="small muted">Select a concept. These are curated explanations, not claims about the author’s precise meaning.</p><div class="actions">'+found.map(x=>'<button class="btn small '+(x.name===t.name?'primary':'')+'" data-learn-term="'+esc(x.name)+'">'+esc(x.name)+(known.includes(x.name)?' ✓':'')+'</button>').join('')+'</div><h2>'+esc(t.name)+'</h2><div class="actions"><button class="btn small" data-learn-level="simple">Simple</button><button class="btn small" data-learn-level="technical">Technical</button></div><p>'+esc(t[learn.level])+'</p><div class="section-label">Example</div><p>'+esc(t.example)+'</p><div class="section-label">Limitation</div><p>'+esc(t.limit)+'</p><div class="section-label">Foundational reading</div>'+t.reads.map(r=>'<p><a target="_blank" rel="noopener noreferrer" href="'+esc(r[1])+'">'+esc(r[0])+' ↗</a></p>').join('')+'<div class="actions"><button class="btn small" data-learn-mark="'+esc(t.name)+'">'+(known.includes(t.name)?'Mark not understood':'Mark understood')+'</button><button class="btn primary small" data-learn-copy="'+esc(t.name)+'">Copy deeper learning prompt</button></div><p class="small muted">Progress is saved on this device only. The copied prompt can be pasted into ChatGPT for an article-specific explanation.</p></article>'}
+`;
+app=app.replace(anchor,anchor+'\n'+feature);
+const start="<h2 class=\"section-title\">Extracted ideas</h2>";
+check(start);
+app=app.replace(start,"<div class=\"actions\" style=\"margin:18px 0\"><button class=\"btn small ${learn.tab==='analysis'?'primary':''}\" data-learn-tab=\"analysis\">Analysis</button><button class=\"btn small ${learn.tab==='understand'?'primary':''}\" data-learn-tab=\"understand\">Understand</button></div>${learn.tab==='understand'?understand(s):`"+start);
+const event="const n=e.target.closest('[data-nav],[data-action],[data-source],[data-filter],[data-decide],[data-edit-belief]');if(!n)return;";
+check(event);
+const handlers=`
+if(n.dataset.learnTab){learn.tab=n.dataset.learnTab;render();return}
+if(n.dataset.learnTerm){learn.term=n.dataset.learnTerm;render();return}
+if(n.dataset.learnLevel){learn.level=n.dataset.learnLevel;render();return}
+if(n.dataset.learnMark){try{let a=JSON.parse(localStorage.getItem('lm-understood-v1')||'[]');a=a.includes(n.dataset.learnMark)?a.filter(x=>x!==n.dataset.learnMark):[...a,n.dataset.learnMark];localStorage.setItem('lm-understood-v1',JSON.stringify(a));render()}catch{flash('Local storage unavailable',true)}return}
+if(n.dataset.learnCopy){try{await navigator.clipboard.writeText(learnPrompt(state.detail.source,n.dataset.learnCopy));flash('Learning prompt copied for ChatGPT')}catch{flash('Clipboard unavailable',true)}return}
+`;
+app=app.replace(event,"const n=e.target.closest('[data-learn-tab],[data-learn-term],[data-learn-level],[data-learn-mark],[data-learn-copy],[data-nav],[data-action],[data-source],[data-filter],[data-decide],[data-edit-belief]');if(!n)return;\n"+handlers);
+await writeFile('dist/app.js',app);
+let sw=await readFile('dist/service-worker.js','utf8');sw=sw.replace('lm-private-shell-v041-github','lm-private-shell-v050-understand');await writeFile('dist/service-worker.js',sw);
+console.log('Understand feature built');

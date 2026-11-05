@@ -1,0 +1,1 @@
+GitHub write permission verification for Living Manifesto ingestion repair.

@@ -45,7 +45,7 @@ function dossierMarkup(s){
  let body='<article class="card" style="margin-top:18px"><div class="section-label">Integrated research · Deep dive</div><h2>Explore this article in depth</h2><p class="small muted">Generated within Living Manifesto, using saved article text. AI explanations and reading recommendations may contain errors; references are suggestions, not independently verified citations.</p>';
  if(integrated.error)body+='<p class="small" role="alert">'+esc(integrated.error)+'</p>';
  if(integrated.loading)body+='<p>Generating research dossier… this may take a little time.</p>';
- if(data?.__loading)body+='<p class="small muted">Loading saved research…</p>';else if(!data)body+='<button class="btn primary" data-research-generate="1" '+(integrated.loading?'disabled':'')+'>Generate deep dive in app</button>';
+ if(data?.__loading)body+='<p class="small muted">Loading saved research…</p>';else if(!data||data.__empty)body+='<button class="btn primary" data-research-generate="1" '+(integrated.loading?'disabled':'')+'>Generate deep dive in app</button>';
  else{body+='<p class="small muted">Source coverage: '+esc(data.source_coverage||'saved text')+'</p>';for(const [key,title] of fields){if(data[key])body+='<section style="margin:22px 0"><h3>'+esc(title)+'</h3><p style="white-space:pre-wrap">'+esc(data[key])+'</p></section>'}if(data.reading?.length){body+='<h3>Suggested foundational reading</h3>';for(const r of data.reading)body+='<p><strong>'+esc(r.title)+'</strong> — '+esc(r.author)+'<br><span class="small">'+esc(r.reason)+'</span> <span class="small muted">'+esc(r.level)+'</span></p>'}body+='<p class="small muted">This dossier is stored in your private Cloudflare database and can be reopened without regeneration.</p>'}
  return body+'</article>';
 }
@@ -72,6 +72,6 @@ if(n.dataset.researchGenerate){
 app=app.replace(eventAnchor,event+eventAnchor);
 const detailAnchor='function detail(){const d=state.detail,s=d?.source;';
 if(!app.includes(detailAnchor))throw Error('Deep dive detail anchor missing');
-app=app.replace(detailAnchor,detailAnchor+"if(s&&!Object.prototype.hasOwnProperty.call(integrated.bySource,s.id)){integrated.bySource[s.id]={__loading:true};api('sources/'+s.id+'/learning-dossier').then(r=>{integrated.bySource[s.id]=r.dossier||null;render()}).catch(()=>{integrated.bySource[s.id]=null;});} ");
+app=app.replace(detailAnchor,detailAnchor+"if(s&&!Object.prototype.hasOwnProperty.call(integrated.bySource,s.id)){integrated.bySource[s.id]={__loading:true};api('sources/'+s.id+'/learning-dossier').then(r=>{integrated.bySource[s.id]=r.dossier||{__empty:true};render()}).catch(()=>{integrated.bySource[s.id]={__empty:true};});} ");
 await writeFile('dist/app.js',app);
 console.log('Integrated Deep dive AI endpoint and frontend ready');

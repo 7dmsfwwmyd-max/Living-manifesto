@@ -2,7 +2,6 @@ import {readFile,writeFile} from 'node:fs/promises';
 let worker=await readFile('dist/_worker.js','utf8');
 const endpoint=String.raw`
 async function researchDossier(req,env,sourceId){
- if(!env.CONVERTER?.run)return failure('Cloudflare AI binding is not configured',503);
  if(!env.DB)return failure('Database binding is not configured',503);
  await env.DB.prepare('CREATE TABLE IF NOT EXISTS learning_dossiers (source_id TEXT PRIMARY KEY, content TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)').run();
  const source=await env.DB.prepare('SELECT id,title,url,summary,question,body,status FROM sources WHERE id=?').bind(sourceId).first();
@@ -11,6 +10,7 @@ async function researchDossier(req,env,sourceId){
  if(req.method!=='POST')return failure('Method not allowed',405);
  const cached=await env.DB.prepare('SELECT content,updated_at FROM learning_dossiers WHERE source_id=?').bind(sourceId).first();
  if(cached)return json({ok:true,dossier:JSON.parse(cached.content),updated_at:cached.updated_at,cached:true});
+ if(!env.CONVERTER?.run)return failure('Cloudflare AI binding is not configured',503);
  const text=String(source.body||'').trim();
  if(text.length<100)return failure('This article does not have enough saved source text for a grounded deep dive. Capture the full article first.',422);
  const related=await rows(env.DB.prepare('SELECT title,summary FROM sources WHERE id != ? AND status=? ORDER BY updated_at DESC LIMIT 12').bind(sourceId,'ready'));
@@ -18,7 +18,7 @@ async function researchDossier(req,env,sourceId){
  const input=JSON.stringify({title:source.title,url:source.url,summary:source.summary,question:source.question,article_text:text.slice(0,17000),related_articles_metadata:related.map(x=>({title:x.title,summary:x.summary}))});
  let response;
  try{response=await env.CONVERTER.run('@cf/meta/llama-3.1-8b-instruct',{messages:[{role:'system',content:system},{role:'user',content:input}],max_tokens:3400,temperature:0.25,response_format:{type:'json_object'}})}catch(e){console.error('Deep dive AI failed',e?.message);return failure('Research generation failed. Please retry.',503)}
- let parsed;try{let raw=response?.response??response?.result?.response??response;parsed=typeof raw==='string'?JSON.parse(raw.trim()):raw;if(!parsed||typeof parsed!=='object'||typeof parsed.overview!=='string')throw Error('Incomplete AI response')}catch(e){console.error('Deep dive parse failed',e?.message);return failure('AI returned an incomplete dossier. Please retry.',502)}
+ let parsed;try{let raw=response?.response??response?.result?.response??response;parsed=typeof raw==='string'?JSON.parse(raw.trim()):raw;if(!parsed||typeof parsed!=='object'||!['overview','first_principles','argument','context','connections','critique','questions'].every(k=>typeof parsed[k]==='string'&&parsed[k].trim())||!Array.isArray(parsed.reading))throw Error('Incomplete AI response')}catch(e){console.error('Deep dive parse failed',e?.message);return failure('AI returned an incomplete dossier. Please retry.',502)}
  const fields=['overview','first_principles','argument','context','connections','critique','questions'];
  const dossier={};for(const k of fields)dossier[k]=String(parsed[k]||'').slice(0,8000);
  dossier.reading=Array.isArray(parsed.reading)?parsed.reading.slice(0,10).map(r=>({title:String(r.title||'').slice(0,180),author:String(r.author||'').slice(0,120),reason:String(r.reason||'').slice(0,400),level:String(r.level||'').slice(0,50)})):[];
@@ -36,6 +36,9 @@ if(!worker.includes(authAnchor))throw Error('Deep dive authenticated route ancho
 const routeLine=" let researchMatch=path.match(new RegExp('^/api/sources/([a-f0-9-]+)/learning-dossier$'));if(researchMatch&&(req.method==='GET'||req.method==='POST'))return researchDossier(req,env,researchMatch[1]);";
 worker=worker.replace(authAnchor,()=>routeLine+'\n'+authAnchor);
 worker=worker.replace("version:'0.4.8'","version:'0.5.1'");
+const exportAnchor="const out={format:'living-manifesto-v02'";
+if(!worker.includes(exportAnchor))throw Error('Backup export anchor missing');
+worker=worker.replace(exportAnchor,"const hasDossiers=await env.DB.prepare(\"SELECT name FROM sqlite_master WHERE type='table' AND name='learning_dossiers'\").first();const out={learning_dossiers:hasDossiers?await rows(env.DB.prepare('SELECT * FROM learning_dossiers')):[],format:'living-manifesto-v02'");
 await writeFile('dist/_worker.js',worker);
 let app=await readFile('dist/app.js','utf8');
 const ui=String.raw`
@@ -73,6 +76,7 @@ if(n.dataset.researchGenerate){
 app=app.replace(eventAnchor,event+eventAnchor);
 const detailAnchor='function detail(){const d=state.detail,s=d?.source;';
 if(!app.includes(detailAnchor))throw Error('Deep dive detail anchor missing');
-app=app.replace(detailAnchor,detailAnchor+"if(s&&!Object.prototype.hasOwnProperty.call(integrated.bySource,s.id)){integrated.bySource[s.id]={__loading:true};api('sources/'+s.id+'/learning-dossier').then(r=>{integrated.bySource[s.id]=r.dossier||{__empty:true};render()}).catch(()=>{integrated.bySource[s.id]={__empty:true};});} ");
+app=app.replace(detailAnchor,detailAnchor+"if(s&&!Object.prototype.hasOwnProperty.call(integrated.bySource,s.id)){integrated.bySource[s.id]={__loading:true};api('sources/'+s.id+'/learning-dossier').then(r=>{integrated.bySource[s.id]=r.dossier||{__empty:true};render()}).catch(e=>{integrated.bySource[s.id]={__empty:true};integrated.error=e.message||'Saved research could not be loaded';render();});} ");
+app=app.replace("state.signedIn=false;return loginView()","state.signedIn=false;integrated.bySource={};integrated.error='';return loginView()");
 await writeFile('dist/app.js',app);
 console.log('Integrated Deep dive AI endpoint and frontend ready');

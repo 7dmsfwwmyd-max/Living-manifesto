@@ -69,3 +69,6 @@ worker=worker.replaceAll("redirect:'error'","redirect:'manual'");
 worker=worker.replaceAll("version:'0.4.7'","version:'0.4.8'");
 await (await import('node:fs/promises')).writeFile(workerPath,worker);
 console.log('Living Manifesto v0.4.8 Cloudflare-compatible redirects prepared');
+
+// Add optional Understand learning workspace without changing the backend or D1 schema.
+await import('./understand-patch.mjs');

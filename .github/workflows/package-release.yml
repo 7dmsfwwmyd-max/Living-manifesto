@@ -21,8 +21,9 @@ jobs:
           node-version: '22'
       - name: Build deployment directory
         run: |
-          node deploy.mjs 2>&1 | tee /tmp/manifesto-build.log
-          test ${PIPESTATUS[0]} -eq 0
+          exec > >(tee /tmp/manifesto-build.log) 2>&1
+          set -x
+          node deploy.mjs
           printf '_worker.js\n_headers\n' > dist/.assetsignore
           node --check dist/_worker.js
           node --check dist/app.js

@@ -13,4 +13,21 @@ for(const [name,gz,sha] of entries){
  await writeFile('dist/'+name,data);
  console.log('Prepared '+name+' ('+data.byteLength+' bytes)');
 }
-console.log('Living Manifesto v0.4.5 ready');
+
+// v0.4.6: apply extraction corrections to the unpacked Worker without changing
+// its D1 schema, authentication, or Shortcut endpoint contracts.
+const workerPath='dist/_worker.js';
+let worker=await (await import('node:fs/promises')).readFile(workerPath,'utf8');
+function patchOnce(from,to,label){
+ const at=worker.indexOf(from);
+ if(at<0||worker.indexOf(from,at+from.length)>=0)throw Error('v0.4.6 patch mismatch: '+label);
+ worker=worker.slice(0,at)+to+worker.slice(at+from.length);
+}
+patchOnce("const x=await retrieveText(s.url,env);",
+"const x=['x.com','twitter.com','www.x.com','www.twitter.com','mobile.x.com','mobile.twitter.com'].includes(new URL(s.url).hostname.toLowerCase()) ? await extractXPost(s.url) : await retrieveText(s.url,env);",
+"X background extraction");
+patchOnce("if(!articleUrl&&full.length>=40)","if(!articleUrl&&full.length>=1)","short X posts");
+worker=worker.replaceAll("version:'0.4.5'","version:'0.4.6'");
+await (await import('node:fs/promises')).writeFile(workerPath,worker);
+console.log('Living Manifesto v0.4.6 prepared');
+

@@ -33,7 +33,8 @@ if(!worker.includes(anchor))throw Error('Deep dive worker handler anchor missing
 worker=worker.replace(anchor,endpoint+'\n'+anchor);
 const authAnchor=" if(path==='/api/capture'&&req.method==='POST')";
 if(!worker.includes(authAnchor))throw Error('Deep dive authenticated route anchor missing');
-worker=worker.replace(authAnchor," let researchMatch=path.match(/^\\/api\\/sources\\/([a-f0-9-]+)\\/learning-dossier$/);if(researchMatch&&(req.method==='GET'||req.method==='POST'))return researchDossier(req,env,researchMatch[1]);\\n"+authAnchor);
+const routeLine=" let researchMatch=path.match(new RegExp('^/api/sources/([a-f0-9-]+)/learning-dossier$'));if(researchMatch&&(req.method==='GET'||req.method==='POST'))return researchDossier(req,env,researchMatch[1]);";
+worker=worker.replace(authAnchor,routeLine+'\n'+authAnchor);
 worker=worker.replace("version:'0.4.8'","version:'0.5.1'");
 await writeFile('dist/_worker.js',worker);
 let app=await readFile('dist/app.js','utf8');

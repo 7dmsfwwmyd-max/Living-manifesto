@@ -60,3 +60,12 @@ await (await import('node:fs/promises')).writeFile(workerPath,worker);
 console.log('Living Manifesto v0.4.7 PDF and X ingestion corrections prepared');
 
 
+
+if(!worker.includes("redirect:'error'"))throw Error('v0.4.8 patch mismatch: expected X fetch redirect settings');
+// Cloudflare Workers only accepts 'follow' or 'manual' for Request.redirect.
+// Use manual for third-party extraction providers so redirects are not followed
+// to unexpected destinations; the existing !res.ok checks reject 3xx responses.
+worker=worker.replaceAll("redirect:'error'","redirect:'manual'");
+worker=worker.replaceAll("version:'0.4.7'","version:'0.4.8'");
+await (await import('node:fs/promises')).writeFile(workerPath,worker);
+console.log('Living Manifesto v0.4.8 Cloudflare-compatible redirects prepared');

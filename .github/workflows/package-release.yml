@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/package-release.yml'
       - 'deploy.mjs'
+      - 'understand-patch.mjs'
   workflow_dispatch:
 jobs:
   package:
@@ -20,6 +21,8 @@ jobs:
           printf '_worker.js\n_headers\n' > dist/.assetsignore
           node --check dist/_worker.js
           node --check dist/app.js
+          grep -q 'deepPrompt' dist/app.js
+          grep -q 'deepView' dist/app.js
           grep -q "version:'0.4.8'" dist/_worker.js
           test -f dist/_headers
       - name: Package deployable files

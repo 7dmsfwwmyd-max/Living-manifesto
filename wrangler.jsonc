@@ -17,7 +17,6 @@
   "ai": {
     "binding": "CONVERTER"
   },
-  "unsafe": { "bindings": [{ "name": "AI", "type": "ai" }] },
   "build": {
     "command": "node deploy.mjs && printf '_worker.js\\n_headers\\n' > dist/.assetsignore"
   }

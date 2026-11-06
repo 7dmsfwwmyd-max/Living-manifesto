@@ -7,7 +7,7 @@ let cookie='';
 async function api(path,method='GET',data){const r=await fetch(new URL('/api/'+path,base),{method,headers:{cookie,'X-Manifesto-Request':'1','Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data),redirect:'error',signal:AbortSignal.timeout(180000)});assert.ok(r.ok,'HTTP '+r.status+' at '+path);if(path==='login')cookie=r.headers.get('set-cookie')?.split(';')[0];return r.json()}
 assert.equal((await api('health')).commit,process.env.EXPECTED_SHA);
 await api('login','POST',{password:process.env.APP_PASSWORD});assert.ok(cookie);
-const text='Release validation fixture. Reliable learning requires separating observations from interpretations. A failed experiment provides evidence about a hypothesis, but does not prove every alternative. Recording assumptions and revisiting evidence allows a reader to revise an explanation rather than merely accumulating notes. Independent checks can expose mistakes that repeated use of the same method misses. '.repeat(3);
+const text='Release validation fixture. Reliable learning requires separating observations from interpretations. A failed experiment provides evidence about a hypothesis, but does not prove every alternative. Recording assumptions and revisiting evidence allows a reader to revise an explanation rather than merely accumulating notes. Independent checks can expose mistakes that repeated use of the same method misses. '.repeat(3).trim();
 const {id}=await api('capture','POST',{title:'Release validation '+process.env.EXPECTED_SHA.slice(0,12),body:text});
 assert.equal((await api('sources/'+id)).source.body,text);
 const path='sources/'+id+'/learning-dossier';

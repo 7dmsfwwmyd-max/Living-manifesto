@@ -9,7 +9,7 @@ const release=await (await get('/release.json')).json();assert.equal(release.com
 for(const path of ['/','/app.js','/styles.css','/service-worker.js'])await get(path);
 assert.equal((await fetch(new URL('/api/sources',base),{redirect:'error'})).status,401);
 if(!process.env.APP_PASSWORD)throw Error('APP_PASSWORD required for authenticated health checks');
-const login=await fetch(new URL('/api/login',base),{method:'POST',headers:{'X-Manifesto-Request':'1','Content-Type':'application/json'},body:JSON.stringify({password:process.env.APP_PASSWORD}),redirect:'error'});assert.equal(login.status,200,'Login failed');
+let login;for(let attempt=0;attempt<4;attempt++){login=await fetch(new URL('/api/login',base),{method:'POST',headers:{'X-Manifesto-Request':'1','Content-Type':'application/json'},body:JSON.stringify({password:process.env.APP_PASSWORD}),redirect:'error'});if(login.status===200||login.status!==401)break;await new Promise(r=>setTimeout(r,5000));}assert.equal(login.status,200,'Login failed');
 const cookie=login.headers.get('set-cookie')?.split(';')[0];assert.ok(cookie);
 const {sources}=await (await get('/api/sources',cookie)).json();assert.ok(Array.isArray(sources));
 for(const source of sources.slice(0,3)){const detail=await (await get('/api/sources/'+source.id,cookie)).json();assert.equal(detail.source.id,source.id);await get('/api/sources/'+source.id+'/learning-dossier',cookie)}

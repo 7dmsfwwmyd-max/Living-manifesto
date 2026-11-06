@@ -1,0 +1,22 @@
+name: Read-only Cloudflare audit
+on:
+  push:
+    branches: ['stabilise/v051-release']
+    paths: ['scripts/cloudflare-audit.mjs', '.github/workflows/cloudflare-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Inspect account and application without mutations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/cloudflare-audit.mjs

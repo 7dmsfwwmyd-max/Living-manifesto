@@ -1,0 +1,21 @@
+name: Configure safe release gate
+on:
+  push:
+    branches: ['stabilise/v051-release']
+    paths: ['scripts/configure-release-gate.mjs']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/configure-release-gate.mjs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -1,0 +1,37 @@
+name: Build and validate isolated staging
+on:
+  push:
+    branches: ['main', 'stabilise/v051-release']
+    paths: ['deploy.mjs', '*-patch.mjs', 'scripts/build.mjs', 'scripts/validate-release.mjs', 'scripts/deploy-staging.mjs', 'scripts/staging-e2e.mjs', 'scripts/healthcheck.mjs', 'tests/**', 'wrangler.jsonc']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: living-manifesto-staging
+  cancel-in-progress: false
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build and test complete application
+        run: node scripts/build.mjs
+      - name: Deploy isolated staging and test real integrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ZERO_COST_CONFIRMED: workers-free-no-payment-method
+          WRANGLER_SEND_METRICS: 'false'
+        run: node scripts/deploy-staging.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: staging-validated-${{ github.sha }}
+          path: |
+            dist/
+            staging-validation.json
+          include-hidden-files: true
+          retention-days: 30

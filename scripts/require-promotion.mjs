@@ -1,0 +1,1 @@
+throw new Error('Direct production deployment is disabled. Build with node scripts/build.mjs, validate isolated staging, then run the Promote validated artifact workflow. It supplies a separate configuration and deploys the exact tested artifact.');

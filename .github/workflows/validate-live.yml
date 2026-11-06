@@ -1,0 +1,49 @@
+name: Validate deployed release
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact commit deployed to both environments
+        required: true
+      production_health:
+        description: Also check production after staging passes
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate staging release and real integrations
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          STAGING_URL: ${{ vars.APP_URL }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          TEST_X_URL: ${{ vars.TEST_X_URL }}
+          TEST_PDF_URL: ${{ vars.TEST_PDF_URL }}
+        run: |
+          node scripts/healthcheck.mjs
+          node scripts/staging-e2e.mjs
+  production:
+    if: ${{ inputs.production_health }}
+    needs: staging
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read-only production health check
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: node scripts/healthcheck.mjs

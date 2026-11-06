@@ -1,18 +1,11 @@
-name: Package Living Manifesto v0.4.8
+name: Validate and package Living Manifesto
 on:
   push:
-    branches: [main]
-    paths:
-      - '.github/workflows/package-release.yml'
-      - 'deploy.mjs'
-      - 'understand-patch.mjs'
-      - 'integrated-learning-patch.mjs'
-      - 'verify-release.mjs'
-      - 'wrangler.jsonc'
+    branches: [main, 'stabilise/**']
+  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
-  issues: write
 jobs:
   package:
     runs-on: ubuntu-latest
@@ -21,36 +14,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Build deployment directory
-        run: |
-          exec > >(tee /tmp/manifesto-build.log) 2>&1
-          set -x
-          node deploy.mjs
-          printf '_worker.js\n_headers\n' > dist/.assetsignore
-          node --check dist/_worker.js
-          node --check dist/app.js
-          node verify-release.mjs
-          node -e "const fs=require('fs');const w=fs.readFileSync('dist/_worker.js','utf8');const a=fs.readFileSync('dist/app.js','utf8');if(!w.includes('learning-dossier')||!w.includes('researchDossier(req,env')||!a.includes('Generate deep dive in app'))process.exit(1);console.log('Integrated learning route and UI smoke checks passed')"
-          grep -q 'deepPrompt' dist/app.js
-          grep -q 'deepView' dist/app.js
-          grep -q 'researchDossier' dist/_worker.js
-          grep -q 'dossierMarkup' dist/app.js
-          grep -q "version:'0.5.1'" dist/_worker.js
-          grep -q "version:'0.5.1'" dist/_worker.js
-          test -f dist/_headers
-      - name: Report failed build for automated diagnosis
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          { echo 'Commit: ${{ github.sha }}'; echo; echo 'Build output:'; cat /tmp/manifesto-build.log 2>/dev/null || true; } > /tmp/manifesto-diagnostic.txt
-          gh issue create --title 'Automated build diagnostic' --body-file /tmp/manifesto-diagnostic.txt || true
-      - name: Package deployable files
-        run: |
-          cd dist
-          zip -qr ../living-manifesto-v0.4.8-cloudflare.zip .
+      - name: Build and test the complete generated application
+        run: node scripts/build.mjs
+      - name: Package exact tested files
+        run: cd dist && zip -qr ../living-manifesto-v0.5.1-cloudflare.zip .
       - uses: actions/upload-artifact@v4
         with:
-          name: living-manifesto-v0.4.8-cloudflare
-          path: living-manifesto-v0.4.8-cloudflare.zip
-          retention-days: 30
+          name: living-manifesto-v0.5.1-${{ github.sha }}
+          path: living-manifesto-v0.5.1-cloudflare.zip
+          retention-days: 90

@@ -1,0 +1,55 @@
+name: Promote validated artifact
+on:
+  workflow_dispatch:
+    inputs:
+      staging_run_id:
+        description: Successful isolated staging workflow run
+        required: true
+      release_sha:
+        description: Exact commit validated by that run
+        required: true
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: living-manifesto-production
+  cancel-in-progress: false
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      STAGING_RUN: ${{ inputs.staging_run_id }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require successful matching staging run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STAGING_RUN" > /tmp/stage-run.json
+          node --input-type=module -e "import fs from 'node:fs';import assert from 'node:assert/strict';const r=JSON.parse(fs.readFileSync('/tmp/stage-run.json'));assert.equal(r.conclusion,'success');assert.equal(r.head_sha,process.env.RELEASE_SHA);assert.equal(r.path,'.github/workflows/staging-release.yml');"
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ env.STAGING_RUN }}
+          name: staging-validated-${{ env.RELEASE_SHA }}
+          path: release
+      - name: Promote exact bytes and verify data preservation
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ZERO_COST_CONFIRMED: workers-free-no-payment-method
+          WRANGLER_SEND_METRICS: 'false'
+        run: node scripts/promote-release.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-verification-${{ github.run_id }}
+          path: |
+            production-rollback.json
+            production-validation.json
+          retention-days: 30

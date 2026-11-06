@@ -18,6 +18,6 @@
     "binding": "CONVERTER"
   },
   "build": {
-    "command": "node scripts/build.mjs"
+    "command": "node scripts/require-promotion.mjs"
   }
 }

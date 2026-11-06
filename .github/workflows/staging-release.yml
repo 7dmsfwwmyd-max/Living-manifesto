@@ -1,8 +1,8 @@
 name: Build and validate isolated staging
 on:
   push:
-    branches: ['stabilise/v051-release']
-    paths: ['scripts/deploy-staging.mjs', '.github/workflows/staging-release.yml', 'scripts/staging-e2e.mjs', 'integrated-learning-patch.mjs']
+    branches: ['main', 'stabilise/v051-release']
+    paths: ['**.mjs', '**.js', 'tests/**', 'package*.json', 'wrangler.jsonc', '.github/workflows/staging-release.yml']
   workflow_dispatch:
 permissions:
   contents: read

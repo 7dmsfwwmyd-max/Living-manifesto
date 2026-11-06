@@ -1,18 +1,13 @@
 name: Promote validated artifact
 on:
-  push:
-    branches: ['stabilise/v051-release']
-    paths: ['.github/workflows/promote-release.yml']
   workflow_dispatch:
     inputs:
       staging_run_id:
         description: Successful isolated staging workflow run
         required: true
-        default: '42217790467'
       release_sha:
         description: Exact commit validated by that run
         required: true
-        default: cd529912abfe385f3a0252e59da204a617b155cc
 permissions:
   contents: read
   actions: read
@@ -24,8 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      STAGING_RUN: ${{ inputs.staging_run_id || '42217790467' }}
-      RELEASE_SHA: ${{ inputs.release_sha || 'cd529912abfe385f3a0252e59da204a617b155cc' }}
+      STAGING_RUN: ${{ inputs.staging_run_id }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

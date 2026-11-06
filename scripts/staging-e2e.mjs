@@ -10,6 +10,20 @@ await api('login','POST',{password:process.env.APP_PASSWORD});assert.ok(cookie);
 const text='Release validation fixture. Reliable learning requires separating observations from interpretations. A failed experiment provides evidence about a hypothesis, but does not prove every alternative. Recording assumptions and revisiting evidence allows a reader to revise an explanation rather than merely accumulating notes. Independent checks can expose mistakes that repeated use of the same method misses. '.repeat(3).trim();
 const {id}=await api('capture','POST',{title:'Release validation '+process.env.EXPECTED_SHA.slice(0,12),body:text});
 assert.equal((await api('sources/'+id)).source.body,text);
+// No process request or pasted analysis: capture alone must complete automatically.
+let analysed;
+for(let n=0;n<240;n++){
+ analysed=await api('sources/'+id);
+ if(analysed.source.status==='ready')break;
+ if(analysed.source.status==='awaiting_content'||(analysed.source.status==='failed'&&analysed.source.attempts>=3))throw Error('Automatic analysis failed: '+analysed.source.error);
+ await new Promise(resolve=>setTimeout(resolve,2000));
+}
+assert.equal(analysed.source.status,'ready','Capture did not complete automatic analysis');
+assert.ok(analysed.source.summary?.length>20);assert.ok(analysed.ideas.length>0);
+assert.ok(analysed.ideas.some(i=>i.excerpt&&text.toLowerCase().includes(i.excerpt.toLowerCase())));
+await api('login','POST',{password:process.env.APP_PASSWORD});
+assert.deepEqual((await api('sources/'+id)).ideas,analysed.ideas);
+console.log('PASS automatic capture analysis, grounded ideas and fresh-login persistence');
 const path='sources/'+id+'/learning-dossier';
 const generated=await api(path,'POST',{});
 for(const field of ['overview','first_principles','argument','context','connections','critique','questions'])assert.ok(generated.dossier[field]?.trim(),field+' missing');

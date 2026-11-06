@@ -1,7 +1,7 @@
 name: Build and validate isolated staging
 on:
   push:
-    branches: ['main', 'stabilise/v051-release']
+    branches: ['main', 'stabilise/v051-release', 'feature/automatic-analysis']
     paths: ['deploy.mjs', '*-patch.mjs', 'scripts/build.mjs', 'scripts/validate-release.mjs', 'scripts/deploy-staging.mjs', 'scripts/staging-e2e.mjs', 'scripts/healthcheck.mjs', 'tests/**', 'wrangler.jsonc']
   workflow_dispatch:
 permissions:

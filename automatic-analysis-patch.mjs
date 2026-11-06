@@ -11,7 +11,7 @@ replace("if(url&&!body&&ctx?.waitUntil)ctx.waitUntil(extractSourceInBackground(e
 replace("async function updateText(req,env,sourceId)","async function updateText(req,env,sourceId,ctx)");
 replace(".bind(body,now(),sourceId).run();return json({ok:true,queued:true})", ".bind(body,now(),sourceId).run();ctx?.waitUntil(processOne(env,sourceId));return json({ok:true,queued:true})");
 replace('return updateText(req,env,match[1]);','return updateText(req,env,match[1],ctx);');
-replace('return json({ok:true,saved:true,duplicate:wasExisting,ready_for_analysis:true',"ctx?.waitUntil(processOne(env,source.id));\n  return json({ok:true,saved:true,processing_automatically:true,duplicate:wasExisting,ready_for_analysis:true");
+replace('return json({ok:true,saved:true,duplicate:wasExisting,ready_for_analysis:true',"ctx?.waitUntil(processOne(env,source.id));\n  return json({ok:true,saved:true,processing_automatically:true,message:'Saved. Analysis is running automatically in Living Manifesto; no ChatGPT handoff is needed.',duplicate:wasExisting,ready_for_analysis:false");
 replace("const changed=await env.DB.prepare(\"UPDATE sources SET status='processing',attempts=attempts+1,updated_at=? WHERE id=? AND status IN ('queued','awaiting_ai','failed')\").bind(now(),uid).run();", "const lease=now();const changed=await env.DB.prepare(\"UPDATE sources SET status='processing',attempts=attempts+1,error='',updated_at=? WHERE id=? AND status IN ('queued','awaiting_ai','failed') AND attempts<3\").bind(lease,uid).run();");
 replace('const x=await retrieveText(s.url,env);body=x.text;',"const x=/^(www\\.|mobile\\.)?(x\\.com|twitter\\.com)$/.test(new URL(s.url).hostname)?await extractXPost(s.url):await retrieveText(s.url,env);body=x.text;");
 replace("await env.DB.prepare('UPDATE sources SET title=?,body=?,retrieval=?,updated_at=? WHERE id=?').bind(title,body,retrieval,now(),uid).run()","await env.DB.prepare(\"UPDATE sources SET title=?,body=?,retrieval=? WHERE id=? AND status='processing' AND updated_at=?\").bind(title,body,retrieval,uid,lease).run()");
@@ -56,7 +56,7 @@ a=a.replace('A URL is not an analysed source. When text has been retrieved, use 
 a=a.replace('If article text was retrieved, use Copy ChatGPT prompt, then Paste ChatGPT analysis. Nothing is treated as read until its text is available.','Automatic analysis will appear here when complete. Text-needed or retry messages explain any interruption.');
 a=a.replace('Once processing is configured, the system will','The system will automatically');
 a += `\nasync function refreshProcessing(){
- try{if(state.signedIn && !document.getElementById('overlay')?.innerHTML && state.sources.some(s=>['queued','processing','awaiting_ai'].includes(s.status))){await reload();if(state.activeSource){state.detail=await api('sources/'+state.activeSource);render();}}}catch{}
+ try{if(state.signedIn && !document.getElementById('overlay')?.innerHTML && state.sources.some(s=>['queued','processing','awaiting_ai','failed'].includes(s.status))){await reload();if(state.activeSource){state.detail=await api('sources/'+state.activeSource);render();}}}catch{}
  setTimeout(refreshProcessing,10000);
 }
 setTimeout(refreshProcessing,10000);\n`;

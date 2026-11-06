@@ -36,5 +36,5 @@ test('automatic analysis: abandoned processing recovered and quota retries delay
  await worker.scheduled({},s.env,{waitUntil:p=>pending.push(p)});await Promise.all(pending);assert.equal((await (await s.req('sources/'+id)).json()).source.attempts,2);
 });
 test('automatic analysis: share sheet intake starts analysis',async()=>{
- const s=await setup();const r=await s.req('shortcut-intake','POST',{text:body,title:'Shared fixture'});const data=await r.json();assert.equal(r.status,200);assert.equal(data.processing_automatically,true);await Promise.all(s.pending);assert.equal((await (await s.req('sources/'+data.source_id)).json()).source.status,'ready');
+ const s=await setup();const r=await s.req('shortcut-intake','POST',{text:body,title:'Shared fixture'});const data=await r.json();assert.equal(r.status,200);assert.equal(data.processing_automatically,true);assert.equal(data.ready_for_analysis,false);await Promise.all(s.pending);assert.equal((await (await s.req('sources/'+data.source_id)).json()).source.status,'ready');
 });

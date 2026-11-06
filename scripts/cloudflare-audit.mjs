@@ -17,3 +17,12 @@ console.log('SUBDOMAIN',JSON.stringify(await read('/workers/scripts/living-manif
 const databases=await read('/d1/database');console.log('DATABASES',JSON.stringify(databases?.map(d=>({uuid:d.uuid,name:d.name,version:d.version,num_tables:d.num_tables,file_size:d.file_size}))));
 if(!settings)throw Error('Worker inspection failed; no changes made');
 console.log('READ_ONLY_AUDIT_COMPLETE: no deployment, database writes, AI calls or subscription changes');
+
+const scripts=await read('/workers/scripts');
+const production=scripts?.find(s=>s.id==='living-manifesto-app');
+if(production?.tag){
+ const triggers=await read('/builds/workers/'+production.tag+'/triggers');
+ console.log('BUILD_TRIGGERS',JSON.stringify(triggers?.map(t=>({trigger_uuid:t.trigger_uuid,build_command:t.build_command,deploy_command:t.deploy_command,branch_includes:t.branch_includes,branch_excludes:t.branch_excludes,root_directory:t.root_directory}))));
+ const builds=await read('/builds/workers/'+production.tag+'/builds');
+ console.log('BUILD_HISTORY',JSON.stringify(Array.isArray(builds)?builds.slice(0,10).map(b=>({id:b.build_uuid,status:b.status,outcome:b.build_outcome,created_on:b.created_on})):builds));
+}

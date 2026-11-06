@@ -41,6 +41,8 @@ Known limits: external retrieval can fail for private/deleted/paywalled sources;
 3. Verify the authenticated production UI and dossier reopening before announcing success. Read-only `validate-live.yml` can additionally use a production GitHub environment with an existing APP_PASSWORD secret; it is optional and not preconfigured.
 4. To roll back manually, use Cloudflare Workers → living-manifesto-app → Deployments → the last healthy recorded version → Roll back. For this release the preceding version is `b3724231-82a5-4c66-9b6f-f9f4b8ebbe68`. Do not restore D1 as part of code rollback. Confirm login, saved articles and cached dossiers afterwards.
 
+Cloudflare’s old main-branch build trigger has been moved to the inactive `release-via-github-actions-only` branch, with build command `node scripts/build.mjs` and a deployment command that refuses direct promotion. Its original build command regenerated unvalidated files and excluded _headers. The settings were read back successfully in run 42218952596.
+
 The root Wrangler configuration deliberately fails direct deployment with a clear promotion instruction. This prevents ordinary `wrangler deploy` or connected Git builds bypassing staging. Staging and promotion supply their own explicit generated configurations. Use `node scripts/build.mjs` for builds, not `wrangler deploy`. No workflow enables billing or changes plans. Keep the public repository and standard runners; review free allowances before changing that arrangement.
 
 ## AI model maintenance

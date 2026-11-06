@@ -26,3 +26,9 @@ if(production?.tag){
  const builds=await read('/builds/workers/'+production.tag+'/builds');
  console.log('BUILD_HISTORY',JSON.stringify(Array.isArray(builds)?builds.slice(0,10).map(b=>({id:b.build_uuid,status:b.status,outcome:b.build_outcome,created_on:b.created_on})):builds));
 }
+
+for(const id of ['918fd354-945b-4518-bfec-c649642a1f0c','6406d7a2-2119-40a4-bacc-7880dcb12ff7']){
+ const logs=await read('/builds/builds/'+id+'/logs');
+ const text=(logs?.lines||[]).map(x=>x.join(' ')).join('\n');
+ console.log('BUILD_LOG_DIAGNOSIS',JSON.stringify({id,lines:logs?.lines?.length,truncated:logs?.truncated,syntax_error:/SyntaxError|syntax error/i.test(text),invalid_token:/Invalid or unexpected token/i.test(text),unexpected_token:/Unexpected token/i.test(text),build_failed:/failed/i.test(text),error_codes:[...text.matchAll(/code: (\d+)/g)].map(m=>m[1])}));
+}

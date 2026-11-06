@@ -28,3 +28,36 @@ If production checks fail, select the recorded last healthy deployment in Cloudf
 ## Current verification boundary
 
 Local generated-app tests are automated. Cloudflare access, staging configuration, real AI/X/PDF calls, production deployment and live verification are still required. The health-check script is implemented but must be wired to the verified environments after account access. Do not interpret this document as confirmation that staging or production has been configured.
+
+## AI model maintenance
+
+Deep Dive uses `@cf/meta/llama-3.3-70b-instruct-fp8-fast`. The original
+`@cf/meta/llama-3.1-8b-instruct` was retired on 30 May 2026:
+https://developers.cloudflare.com/changelog/post/2026-05-08-planned-model-deprecations/
+The replacement model and JSON output are documented at:
+https://developers.cloudflare.com/workers-ai/models/llama-3.3-70b-instruct-fp8-fast/
+
+The generated-worker tests verify the selected model and preserve source data
+on AI failure. They cannot establish provider availability. Before promotion,
+generate and reopen a dossier against the real staging AI binding. Review the
+Cloudflare deprecation changelog before each release. Do not claim real AI success
+from fixture tests. Existing cached dossiers remain readable if AI is unavailable.
+
+## Automated deployed validation
+
+`validate-live.yml` is a manually dispatched workflow. Configure GitHub environments
+`staging` and `production`, each with APP_URL variable and APP_PASSWORD secret.
+Staging additionally requires TEST_X_URL and TEST_PDF_URL for stable, accessible
+public fixtures. Run the workflow on the reviewed release branch with the exact
+deployed commit. It fails closed when configuration or external calls are missing.
+It does not deploy anything or provision databases. Production checking is optional,
+read-only and depends on successful staging validation. Configure these environments
+only after verifying the staging Worker has a separate database and production's
+original database is retained.
+
+The staging script writes only synthetic sources, generates a real dossier,
+logs in again and compares stored content, checks cached reuse and export, then
+checks X and PDF extraction. It refuses the known production hostname. Test sources
+are retained, with no destructive cleanup. Never supply another production/custom
+production URL as STAGING_URL. A staging hostname guard is not database isolation;
+verify bindings before enabling the workflow. Browser validation remains necessary.

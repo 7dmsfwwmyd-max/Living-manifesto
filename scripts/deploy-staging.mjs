@@ -26,6 +26,7 @@ try{
  const subdomain=await api('/workers/subdomain');
  const base='https://living-manifesto-staging.'+subdomain.subdomain+'.workers.dev';
  const env={...process.env,APP_PASSWORD:secrets.APP_PASSWORD,APP_URL:base,STAGING_URL:base,EXPECTED_SHA:process.env.GITHUB_SHA,TEST_X_URL:'https://x.com/l1vsun/status/2116519560631205914',TEST_PDF_URL:'https://arxiv.org/pdf/1706.03762'};
+ let ready=false;for(let attempt=0;attempt<30;attempt++){try{const r=await fetch(base+'/api/health',{signal:AbortSignal.timeout(10000)});if(r.ok&&(await r.json()).commit===process.env.GITHUB_SHA){ready=true;break}}catch{}await new Promise(r=>setTimeout(r,2000))}assert.ok(ready,'Staging did not serve the expected release within readiness window');
  execFileSync(process.execPath,['scripts/healthcheck.mjs'],{stdio:'inherit',env});
  execFileSync(process.execPath,['scripts/staging-e2e.mjs'],{stdio:'inherit',env});
  await writeFile('staging-validation.json',JSON.stringify({commit:process.env.GITHUB_SHA,url:base,database_id:db.uuid,passed:true,validated_at:new Date().toISOString()},null,2));

@@ -38,3 +38,18 @@ test('automatic analysis: abandoned processing recovered and quota retries delay
 test('automatic analysis: share sheet intake starts analysis',async()=>{
  const s=await setup();const r=await s.req('shortcut-intake','POST',{text:body,title:'Shared fixture'});const data=await r.json();assert.equal(r.status,200);assert.equal(data.processing_automatically,true);assert.equal(data.ready_for_analysis,false);await Promise.all(s.pending);assert.equal((await (await s.req('sources/'+data.source_id)).json()).source.status,'ready');
 });
+test('topics: authenticated retrieved resources, grounded ranking, caching and export',async()=>{
+ const s=await setup(),old=globalThis.fetch;let searches=0;
+ const fixture='<h2 class="result__title"><a class="result__a" href="https://example.org/learning">Learning &amp; evidence</a></h2><a class="result__snippet">A foundation in evidence.</a><h2 class="result__title"><a class="result__a" href="javascript:alert(1)">Unsafe</a></h2>';
+ try{globalThis.fetch=async()=>{searches++;return new Response(fixture)};s.env.CONVERTER.run=async()=>({response:JSON.stringify({resources:[{id:'999',reason:'Invented'},{id:'1',reason:'Foundation based on snippet',level:'Foundation'},{id:'1',reason:'Duplicate'}]})});
+ assert.equal((await s.req('topics','GET',undefined,{cookie:''})).status,401);
+ assert.equal((await s.req('topics','POST',{topic:'Learning'},{Origin:'https://evil.example'})).status,403);
+ const r=await s.req('topics','POST',{topic:'Learning'});assert.equal(r.status,200);const data=await r.json();assert.equal(data.resources.length,1);assert.equal(data.resources[0].url,'https://example.org/learning');assert.equal(data.ranked,true);assert.equal(searches,4);
+ assert.equal((await (await s.req('topics','POST',{topic:'learning'})).json()).cached,true);assert.equal(searches,4);
+ assert.equal((await (await s.req('topics')).json()).searches[0].id,data.id);assert.equal((await (await s.req('export')).json()).topic_searches.length,1);
+ }finally{globalThis.fetch=old}
+});
+test('topics: provider challenge stops searches; no invented resources persisted',async()=>{
+ const s=await setup(),old=globalThis.fetch;let calls=0;
+ try{globalThis.fetch=async()=>{calls++;return new Response('<form class="challenge-form">',{status:202})};assert.equal((await s.req('topics','POST',{topic:'Evidence'})).status,503);assert.equal(calls,1);assert.equal((await (await s.req('topics')).json()).searches.length,0)}finally{globalThis.fetch=old}
+});

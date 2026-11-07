@@ -57,3 +57,14 @@ test('topics: independent scholarly retrieval works when general search is block
  const s=await setup(),old=globalThis.fetch;delete s.env.CONVERTER;
  try{globalThis.fetch=async url=>String(url).includes('api.crossref.org')?Response.json({message:{items:[{title:['Evidence and inference'],URL:'https://doi.org/10.1234/example',author:[{given:'A',family:'Scholar'}]}]}}):new Response('unavailable',{status:503});const r=await s.req('topics','POST',{topic:'Evidence'});assert.equal(r.status,200);const d=await r.json();assert.equal(d.resources[0].kind,'Paper / book');assert.equal(d.ranked,false);assert.ok(d.coverage.some(x=>x.kind==='Web / blog'&&x.status.includes('limited')))}finally{globalThis.fetch=old}
 });
+test('indexed discovery: basic-only requests, safe results, no secret in output and hard monthly stop',async()=>{
+ const s=await setup(),old=globalThis.fetch;Object.assign(s.env,{TAVILY_API_KEY:'test-private-key',TAVILY_FREE_ONLY:'1'});delete s.env.CONVERTER;let calls=0;
+ try{globalThis.fetch=async(url,opts)=>{
+  if(!String(url).includes('api.tavily.com'))return new Response('Unavailable',{status:503});calls++;const p=JSON.parse(opts.body);assert.equal(p.search_depth,'basic');assert.equal(p.auto_parameters,false);assert.equal(p.include_raw_content,false);assert.equal(opts.redirect,'manual');assert.equal(opts.headers.Authorization,'Bearer test-private-key');
+  const link=p.include_domains[0]==='youtube.com'?'https://www.youtube.com/watch?v=abc':p.include_domains[0]==='x.com'?'https://x.com/example/status/123':p.query.endsWith('filetype:pdf')?'https://example.org/guide.pdf':'https://example.org/essay';
+  return Response.json({results:[{url:link,title:'Retrieved resource',content:'Evidence and reasoning'},{url:'http://127.0.0.1/private',title:'Unsafe'}]});
+ };
+ const r=await s.req('topics','POST',{topic:'Evidence'}),d=await r.json();assert.equal(r.status,200);assert.equal(calls,4);assert.equal(d.resources.length,4);assert.equal(JSON.stringify(d).includes('test-private-key'),false);assert.deepEqual(d.resources.map(x=>x.kind),['Web / blog','YouTube','X','PDF']);
+ s.env.DB.db.prepare('UPDATE search_budget SET calls=800').run();assert.equal((await s.req('topics','POST',{topic:'Another topic'})).status,503);assert.equal(calls,4);
+ }finally{globalThis.fetch=old}
+});

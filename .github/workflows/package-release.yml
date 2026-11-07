@@ -1,7 +1,7 @@
 name: Validate and package Living Manifesto
 on:
   push:
-    branches: [main, 'stabilise/**']
+    branches: [main, 'stabilise/**', 'feature/automatic-analysis']
   pull_request:
   workflow_dispatch:
 permissions:
@@ -17,9 +17,9 @@ jobs:
       - name: Build and test the complete generated application
         run: node scripts/build.mjs
       - name: Package exact tested files
-        run: cd dist && zip -qr ../living-manifesto-v0.5.1-cloudflare.zip .
+        run: cd dist && zip -qr ../living-manifesto-v0.5.2-cloudflare.zip .
       - uses: actions/upload-artifact@v4
         with:
-          name: living-manifesto-v0.5.1-${{ github.sha }}
-          path: living-manifesto-v0.5.1-cloudflare.zip
+          name: living-manifesto-v0.5.2-${{ github.sha }}
+          path: living-manifesto-v0.5.2-cloudflare.zip
           retention-days: 90

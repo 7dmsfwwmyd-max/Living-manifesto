@@ -15,7 +15,7 @@ const databases=await api('/d1/database');
 let db=databases.find(d=>d.name==='living-manifesto-staging');
 if(!db){assert.ok(databases.length<10,'Free database limit reached');db=await api('/d1/database','POST',{name:'living-manifesto-staging',primary_location_hint:'weur'})}
 assert.ok(db.uuid&&db.uuid!==productionDB,'Staging must never use production D1');
-const config={name:'living-manifesto-staging',main:'dist/_worker.js',compatibility_date:'2026-11-01',workers_dev:true,preview_urls:false,assets:{directory:'dist',binding:'ASSETS',run_worker_first:true},d1_databases:[{binding:'DB',database_name:db.name,database_id:db.uuid}],ai:{binding:'CONVERTER'},keep_vars:true};
+const config={name:'living-manifesto-staging',main:'dist/_worker.js',compatibility_date:'2026-11-01',workers_dev:true,preview_urls:false,assets:{directory:'dist',binding:'ASSETS',run_worker_first:true},d1_databases:[{binding:'DB',database_name:db.name,database_id:db.uuid}],ai:{binding:'CONVERTER'},keep_vars:false,triggers:{crons:['*/2 * * * *']}};
 await writeFile('wrangler.staging.generated.json',JSON.stringify(config,null,2));
 const secrets={APP_PASSWORD:randomBytes(32).toString('hex'),SESSION_SECRET:randomBytes(32).toString('hex'),SHORTCUT_TOKEN:randomBytes(32).toString('hex')};
 for(const value of Object.values(secrets))console.log('::add-mask::'+value);

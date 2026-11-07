@@ -15,11 +15,13 @@ const original=await api(path+'/settings');assert.equal(original.bindings.find(b
 const previous=(await api(path+'/deployments')).deployments[0];assert.ok(previous.versions?.length);
 const bookmark=await api('/d1/database/'+db+'/time_travel/bookmark');assert.ok(bookmark.bookmark,'Time Travel restore point required');
 async function fingerprint(){const q=await api('/d1/database/'+db+'/query','POST',{sql:"SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name != 'auth_attempts'"});const out={};for(const {name:table} of q[0].results){assert.match(table,/^[a-zA-Z_]+$/);const result=await api('/d1/database/'+db+'/query','POST',{sql:'SELECT * FROM "'+table+'"'});const rows=result[0].results.map(x=>JSON.stringify(x)).sort();out[table]={count:rows.length,hash:createHash('sha256').update(JSON.stringify(rows)).digest('hex')}}return out}
+const previousSchedules=await api(path+'/schedules');
+try{
+await api(path+'/schedules','PUT',[]);
 const before=await fingerprint();
-await writeFile('production-rollback.json',JSON.stringify({previous_deployment:{id:previous.id,versions:previous.versions},bookmark:bookmark.bookmark,release:manifest.commit},null,2));
+await writeFile('production-rollback.json',JSON.stringify({previous_deployment:{id:previous.id,versions:previous.versions},previous_schedules:previousSchedules,bookmark:bookmark.bookmark,release:manifest.commit},null,2));
 const config={name,main:'release/dist/_worker.js',compatibility_date:original.compatibility_date,workers_dev:true,preview_urls:true,keep_vars:true,assets:{directory:'release/dist',binding:'ASSETS',run_worker_first:true},d1_databases:[{binding:'DB',database_name:'living-manifesto',database_id:db}],ai:{binding:'CONVERTER'}};
 await writeFile('wrangler.production.generated.json',JSON.stringify(config,null,2));
-try{
  execFileSync('npx',['--yes','wrangler@4.158.0','deploy','--config','wrangler.production.generated.json','--no-bundle'],{stdio:'inherit'});
  let ready=false;for(let n=0;n<30;n++){try{const r=await fetch(base+'/api/health',{signal:AbortSignal.timeout(10000)});if(r.ok&&(await r.json()).commit===manifest.commit){ready=true;break}}catch{}await new Promise(r=>setTimeout(r,2000))}assert.ok(ready,'Production revision did not become ready');
  for(const asset of ['/','/app.js','/styles.css','/service-worker.js','/release.json']){const r=await fetch(base+asset);assert.equal(r.status,200,asset);if(asset!=='/release.json'){const file=asset==='/'?'index.html':asset.slice(1);assert.equal(createHash('sha256').update(Buffer.from(await r.arrayBuffer())).digest('hex'),manifest.files[file],asset+' live bytes differ')}}
@@ -27,5 +29,6 @@ try{
  const current=await api(path+'/settings');assert.equal(current.bindings.find(b=>b.name==='DB')?.id,db);for(const secret of ['APP_PASSWORD','SESSION_SECRET','SHORTCUT_TOKEN'])assert.ok(current.bindings.some(b=>b.name===secret&&b.type==='secret_text'));
  assert.deepEqual(await fingerprint(),before,'Stored data changed during deployment');
  await writeFile('production-validation.json',JSON.stringify({commit:manifest.commit,version:manifest.version,validated_at:new Date().toISOString(),public_health:true,asset_hashes:true,anonymous_access_denied:true,data_unchanged:true,authenticated_browser_checks:'pending'},null,2));
+ await api(path+'/schedules','PUT',[{cron:'*/2 * * * *'}]);
  console.log('PASS production revision, exact asset hashes, access control, original bindings and unchanged data. Authenticated browser verification remains required.');
-}catch(e){console.error('Production gate failed; restoring previous Worker deployment without changing D1');await api(path+'/deployments','POST',{strategy:'percentage',versions:previous.versions});throw e}
+}catch(e){console.error('Production gate failed; restoring previous Worker deployment without changing D1');await api(path+'/deployments','POST',{strategy:'percentage',versions:previous.versions});await api(path+'/schedules','PUT',(previousSchedules.schedules||previousSchedules||[]).map(s=>({cron:s.cron})));throw e}

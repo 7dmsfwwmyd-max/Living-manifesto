@@ -77,3 +77,15 @@ checks X and PDF extraction. It refuses the known production hostname. Test sour
 are retained, with no destructive cleanup. Never supply another production/custom
 production URL as STAGING_URL. A staging hostname guard is not database isolation;
 verify bindings before enabling the workflow. Browser validation remains necessary.
+
+## v0.5.2 — automatic analysis
+
+New captures and Share Sheet intake start analysis using the existing CONVERTER Workers AI binding. Share Sheet responses set `processing_automatically: true` and `ready_for_analysis: false` to skip the old manual ChatGPT handoff. Supplied text replacement also queues work, but already-analysed sources cannot be overwritten. Manual analysis import remains available as a fallback.
+
+The sources table is the durable queue; no paid queue service is used. A two-minute scheduled handler processes one pending source per run and recovers processing leases older than five minutes. Existing pending sources are eligible too. Each source has at most three automatic attempts. Quota/capacity failures defer the next attempt for 24 hours. Exhausted retries show a retry action; inaccessible sources show Text needed. The scheduler continues when the browser is closed. The browser polls status every ten seconds while pending work exists and no edit dialog is open.
+
+Analysis covers up to the first 10,000 characters of saved text, to bound free-tier usage. It requires a nonempty summary/question and at least one verified source excerpt before atomically committing ideas and proposed principles. Proposals are never automatically adopted. Deep Dive remains a separate saved learning dossier under Understand.
+
+Staging supplies fresh credentials without preserving previous staging values. Health checks allow a short credential-propagation window, capped below the login lockout threshold. Production credentials remain preserved. Promotion records and pauses existing schedules, verifies data preservation, then enables the two-minute schedule; automatic rollback restores the previous code and schedules. When manually rolling back to v0.5.1, also restore the saved schedule configuration (normally no cron). Do not restore D1 for a code rollback.
+
+Validation adds tests for capture-only analysis, Share Sheet handoff suppression, duplicate/ready-source preservation, grounded excerpts, invalid AI results, scheduled recovery and quota backoff. Staging creates a synthetic source and requires it to become Analysed without a process request or pasted analysis, then verifies fresh-login persistence and the existing Deep Dive, X and PDF flows.

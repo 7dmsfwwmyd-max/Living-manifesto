@@ -20,6 +20,23 @@ function topicResults(html) {
  }
  return out;
 }
+async function indexedTopicResults(env,topic,label,suffix){
+ // Reserve before the request; failed calls still consume our conservative budget.
+ // This is an additional limit, not a substitute for a free, no-card provider account.
+ await env.DB.prepare('CREATE TABLE IF NOT EXISTS search_budget (month TEXT PRIMARY KEY, calls INTEGER NOT NULL)').run();
+ const month=new Date().toISOString().slice(0,7),limit=env.SEARCH_STAGING==='1'?40:800;
+ const reservation=await env.DB.prepare('INSERT INTO search_budget(month,calls) VALUES(?,1) ON CONFLICT(month) DO UPDATE SET calls=calls+1 WHERE calls<? RETURNING calls').bind(month,limit).first();
+ if(!reservation)throw Error('Monthly free-search allowance reached');
+ const domains=label==='YouTube'?['youtube.com','youtu.be']:label==='X'?['x.com','twitter.com']:[];
+ const response=await fetch('https://api.tavily.com/search',{method:'POST',redirect:'manual',signal:AbortSignal.timeout(15000),headers:{Authorization:'Bearer '+env.TAVILY_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({query:topic+suffix,topic:'general',search_depth:'basic',auto_parameters:false,max_results:8,include_domains:domains,include_answer:false,include_raw_content:false,include_images:false,include_usage:true})});
+ if(!response.ok)throw Error('Search service unavailable or free allowance exhausted');
+ const data=await response.json(),out=[];
+ for(const item of (Array.isArray(data.results)?data.results:[]).slice(0,8)){try{
+  const url=safeUrl(item.url),kind=topicKind(url),title=clean(item.title,250);if(!title||suffix&&kind!==label)continue;
+  out.push({url,title,kind,snippet:clean(item.content,700)});
+ }catch{}}
+ return out;
+}
 async function topicSearch(req,env){
  await topicTable(env);
  if(req.method==='GET')return json({searches:(await rows(env.DB.prepare('SELECT * FROM topic_searches ORDER BY created_at DESC LIMIT 30'))).map(r=>({...JSON.parse(r.content),id:r.id,created_at:r.created_at}))});
@@ -34,6 +51,12 @@ async function topicSearch(req,env){
  for(const [label,suffix] of [['Web / blog',''],['YouTube',' site:youtube.com/watch'],['X',' site:x.com'],['PDF',' filetype:pdf']]){
   if(blocked){coverage.push({kind:label,status:'Search provider unavailable'});continue}
   try{
+   if(env.TAVILY_API_KEY&&env.TAVILY_FREE_ONLY==='1'){
+    const found=await indexedTopicResults(env,topic,label,suffix);
+    coverage.push({kind:label,status:found.length?'Retrieved':'No indexed results returned'});
+    for(const result of found)if(!candidates.some(x=>x.url===result.url))candidates.push({...result,id:String(candidates.length+1)});
+    continue;
+   }
    const r=await fetch('https://html.duckduckgo.com/html/?q='+encodeURIComponent(topic+suffix),{signal:AbortSignal.timeout(12000),redirect:'manual'});
    const html=await r.text();
    if(r.status!==200||/challenge-form|anomaly-modal/i.test(html)){blocked=true;coverage.push({kind:label,status:'Search provider limited this request'});continue}

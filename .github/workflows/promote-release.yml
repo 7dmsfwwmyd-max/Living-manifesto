@@ -1,8 +1,5 @@
 name: Promote validated artifact
 on:
-  push:
-    branches: [feature/topic-discovery]
-    paths: [.github/workflows/promote-release.yml]
   workflow_dispatch:
     inputs:
       staging_run_id:
@@ -22,8 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      STAGING_RUN: ${{ inputs.staging_run_id || '42317760771' }}
-      RELEASE_SHA: ${{ inputs.release_sha || '1496c45d6705012fd1b609df8eb2f81d23b3e3a5' }}
+      STAGING_RUN: ${{ inputs.staging_run_id }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -27,14 +27,14 @@ async function topicSearch(req,env){
  const p=await payload(req,3000),topic=clean(p.topic,180).replace(/\s+/g,' ');
  if(topic.length<3)return failure('Enter a topic of at least three characters');
  const cached=await env.DB.prepare('SELECT * FROM topic_searches WHERE lower(topic)=lower(?) AND created_at>? ORDER BY created_at DESC LIMIT 1').bind(topic,new Date(Date.now()-86400000).toISOString()).first();
- if(cached)return json({...JSON.parse(cached.content),id:cached.id,created_at:cached.created_at,cached:true});
+ if(cached&&!p.refresh)return json({...JSON.parse(cached.content),id:cached.id,created_at:cached.created_at,cached:true});
  const recent=await env.DB.prepare('SELECT count(*) n FROM topic_searches WHERE created_at>?').bind(new Date(Date.now()-3600000).toISOString()).first();
  if(recent.n>=5)return failure('Five topic searches per hour keeps this within the free service. Reopen a saved search or try later.',429);
  const candidates=[],coverage=[];let blocked=false;
  for(const [label,suffix] of [['Web / blog',''],['YouTube',' site:youtube.com/watch'],['X',' site:x.com'],['PDF',' filetype:pdf']]){
   if(blocked){coverage.push({kind:label,status:'Search provider unavailable'});continue}
   try{
-   const r=await fetch('https://html.duckduckgo.com/html/?q='+encodeURIComponent(topic+suffix),{signal:AbortSignal.timeout(12000),redirect:'error'});
+   const r=await fetch('https://html.duckduckgo.com/html/?q='+encodeURIComponent(topic+suffix),{signal:AbortSignal.timeout(12000),redirect:'manual'});
    const html=await r.text();
    if(r.status!==200||/challenge-form|anomaly-modal/i.test(html)){blocked=true;coverage.push({kind:label,status:'Search provider limited this request'});continue}
    if(html.length>1000000)throw Error('Response too large');
@@ -45,7 +45,7 @@ async function topicSearch(req,env){
  }
  // Reference discovery via Wikipedia's public API, retaining citation provenance.
  try{
-  const opts={signal:AbortSignal.timeout(12000),redirect:'error',headers:{'User-Agent':'LivingManifesto/0.5.3 (https://github.com/7dmsfwwmyd-max/Living-manifesto)'}};
+  const opts={signal:AbortSignal.timeout(12000),redirect:'manual',headers:{'User-Agent':'LivingManifesto/0.5.3 (https://github.com/7dmsfwwmyd-max/Living-manifesto)'}};
   const r=await fetch('https://en.wikipedia.org/w/api.php?action=query&list=search&srlimit=1&format=json&srsearch='+encodeURIComponent(topic),opts);
   if(!r.ok)throw Error('Reference search unavailable');const page=(await r.json()).query?.search?.[0];let count=0;
   if(page){
@@ -65,7 +65,7 @@ async function topicSearch(req,env){
  }catch{coverage.push({kind:'Reference sources',status:'Search unavailable'})}
  // Independent public metadata API; no key, paid tier or retry around challenges.
  try{
-  const r=await fetch('https://api.crossref.org/works?rows=6&select=title,URL,link,author,published&query='+encodeURIComponent(topic),{signal:AbortSignal.timeout(12000),redirect:'error'});
+  const r=await fetch('https://api.crossref.org/works?rows=6&select=title,URL,link,author,published&query='+encodeURIComponent(topic),{signal:AbortSignal.timeout(12000),redirect:'manual'});
   if(!r.ok)throw Error('Scholarly search unavailable');const data=await r.json();let count=0;
   for(const item of (data.message?.items||[]).slice(0,6)){try{
    const pdf=item.link?.find(x=>x['content-type']==='application/pdf'),url=safeUrl(pdf?.URL||item.URL),title=clean(item.title?.[0],250);if(!title||candidates.some(x=>x.url===url))continue;

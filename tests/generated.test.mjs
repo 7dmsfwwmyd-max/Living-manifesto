@@ -41,7 +41,7 @@ test('automatic analysis: share sheet intake starts analysis',async()=>{
 test('topics: authenticated retrieved resources, grounded ranking, caching and export',async()=>{
  const s=await setup(),old=globalThis.fetch;let searches=0;
  const fixture='<h2 class="result__title"><a class="result__a" href="https://example.org/learning">Learning &amp; evidence</a></h2><a class="result__snippet">A foundation in evidence.</a><h2 class="result__title"><a class="result__a" href="javascript:alert(1)">Unsafe</a></h2>';
- try{globalThis.fetch=async()=>{searches++;return new Response(fixture)};s.env.CONVERTER.run=async()=>({response:JSON.stringify({resources:[{id:'999',reason:'Invented'},{id:'1',reason:'Foundation based on snippet',level:'Foundation'},{id:'1',reason:'Duplicate'}]})});
+ try{globalThis.fetch=async(url,opts)=>{assert.equal(opts.redirect,'manual','Workers supports manual redirects');searches++;return new Response(fixture)};s.env.CONVERTER.run=async()=>({response:JSON.stringify({resources:[{id:'999',reason:'Invented'},{id:'1',reason:'Foundation based on snippet',level:'Foundation'},{id:'1',reason:'Duplicate'}]})});
  assert.equal((await s.req('topics','GET',undefined,{cookie:''})).status,401);
  assert.equal((await s.req('topics','POST',{topic:'Learning'},{Origin:'https://evil.example'})).status,403);
  const r=await s.req('topics','POST',{topic:'Learning'});assert.equal(r.status,200);const data=await r.json();assert.equal(data.resources.length,1);assert.equal(data.resources[0].url,'https://example.org/learning');assert.equal(data.ranked,true);assert.equal(searches,6);

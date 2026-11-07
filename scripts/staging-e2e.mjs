@@ -46,3 +46,10 @@ for(const [label,url] of [['X',process.env.TEST_X_URL],['PDF',process.env.TEST_P
  assert.ok(label==='PDF'?source.retrieval?.startsWith('pdf_'):source.retrieval?.startsWith('x_'),label+' did not use the expected extractor');
 }
 console.log('PASS staging login, capture, real AI, persisted dossier, cached reopen, export, X and PDF retrieval. Synthetic staging sources retained.');
+const topic=await api('topics','POST',{topic:'Bayesian reasoning',refresh:true});
+assert.ok(topic.resources.length>0,'No retrieved topic resources');
+for(const resource of topic.resources)assert.match(resource.url,/^https?:\/\//);
+await api('login','POST',{password:process.env.APP_PASSWORD});
+assert.deepEqual((await api('topics')).searches.find(x=>x.id===topic.id).resources,topic.resources);
+assert.equal((await api('topics','POST',{topic:'Bayesian reasoning'})).cached,true);
+console.log('PASS real topic retrieval, persisted resources and cached reopening; coverage: '+JSON.stringify(topic.coverage));

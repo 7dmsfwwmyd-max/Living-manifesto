@@ -7,5 +7,6 @@ w=replace(w,"const out={learning_dossiers:","const hasTopics=await env.DB.prepar
 w=w.replace("version:'0.5.2'","version:'0.5.3'");
 a=replace(a,'function explore(){','function explore(){return topicMarkup()+exploreConnections()}\nfunction exploreConnections(){');
 a=replace(a,'start();',(await readFile('features/topics-app.js','utf8'))+'\nstart();');
+a=replace(a,"if(state.signedIn && !document.getElementById('overlay')", "if(state.signedIn && document.activeElement?.id!=='topic-query' && !topics.loading && !document.getElementById('overlay')");
 a=a.replaceAll('v0.5.2','v0.5.3');
 await writeFile('dist/_worker.js',w);await writeFile('dist/app.js',a);

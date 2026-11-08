@@ -1,0 +1,13 @@
+import {readFile,writeFile} from 'node:fs/promises';
+let worker=await readFile('dist/_worker.js','utf8'),app=await readFile('dist/app.js','utf8');
+const replace=(s,needle,value)=>{if(!s.includes(needle))throw Error('Evergreen patch anchor missing: '+needle);return s.replace(needle,()=>value)};
+worker=replace(worker,'async function handle(req,env,ctx)',(await readFile('features/evergreen-worker.js','utf8'))+'\nasync function handle(req,env,ctx)');
+worker=replace(worker," if(path==='/api/session'"," if(path==='/api/evergreen'||path.startsWith('/api/evergreen/'))return evRoute(req,env,path);\n if(path==='/api/session'");
+worker=replace(worker,'const hasStudio=await env.DB.prepare',"const hasEvergreen=await env.DB.prepare(\"SELECT name FROM sqlite_master WHERE type='table' AND name='evergreen_notes'\").first();const hasEvergreenHistory=await env.DB.prepare(\"SELECT name FROM sqlite_master WHERE type='table' AND name='evergreen_history'\").first();const hasStudio=await env.DB.prepare");
+worker=replace(worker,'const out={studio_state:',"const out={evergreen_notes:hasEvergreen?await rows(env.DB.prepare('SELECT * FROM evergreen_notes')):[],evergreen_history:hasEvergreenHistory?await rows(env.DB.prepare('SELECT * FROM evergreen_history')):[],studio_state:");
+worker=replace(worker,"version:'0.5.5'","version:'0.5.6'");
+app=replace(app,'function explore(){return topicMarkup()+studioOverview()+exploreConnections()}','function explore(){return evergreenMarkup()+topicMarkup()+studioOverview()+exploreConnections()}');
+app=replace(app,'start();',(await readFile('features/evergreen-app.js','utf8'))+'\nstart();');
+app=app.replaceAll('v0.5.5','v0.5.6');
+await writeFile('dist/_worker.js',worker);await writeFile('dist/app.js',app);
+console.log('Evergreen v0.5.6: private durable concept notes, citations, versions and portable exports; no additional AI.');

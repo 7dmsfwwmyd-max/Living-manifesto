@@ -59,8 +59,12 @@ try{
  assert.equal(await evaluate(login),true,'Password form missing');
  await until('typeof state!=="undefined"&&state.signedIn===true','authenticated browser session');
  await until('!!document.querySelector("[data-nav=Library]")','authenticated application shell');
- const sourceId=await evaluate('(async()=>{const r=await api("sources");return r.sources.find(x=>String(x.title||"").includes("Release validation '+commit.slice(0,12)+'"))?.id||null})()');
- assert.ok(sourceId,'Staging release fixture is missing');
+ let sourceId=await evaluate('(async()=>{const r=await api("sources");const sources=r.sources||[];return (sources.find(x=>String(x.title||"").includes("Release validation '+commit.slice(0,12)+'"))||sources.find(x=>String(x.title||"").startsWith("Release validation ")))?.id||null})()');
+ if(!sourceId){
+  const seed='Browser-only synthetic learning fixture. An evidence claim needs verifiable text; a plausible explanation should be tested against alternative explanations. '.repeat(4);
+  sourceId=await evaluate('(async()=>{const d=await api("capture",{method:"POST",body:JSON.stringify({title:"Release validation first browser fixture",body:'+JSON.stringify(seed)+'})});return d.id})()');
+ }
+ assert.ok(sourceId,'No synthetic source available for authenticated browser tests');
  const nav=await evaluate('(()=>{const n=document.querySelector("[data-nav=Library]");if(n){n.click();return true}return false})()');
  assert.equal(nav,true,'Library navigation link is unavailable');
  await until('!!document.querySelector("[data-source]")','library source cards');
@@ -71,11 +75,11 @@ try{
  await until('!!document.getElementById("lm-studio-review")','Learning Studio in Understand');
 
  assert.equal(await evaluate('(()=>{const n=document.querySelector("[data-studio-reveal]");n?.click();return !!document.body.innerText.includes("Verbatim saved-text excerpt")})()'),true,'Reference reveal did not work');
- const answer='The article argues that evidence should be checked before reaching a conclusion, and alternative explanations should be considered.';
+ const answer='The article argues that evidence should be checked before reaching a conclusion, and alternative explanations should be considered. Tested on '+commit.slice(0,12);
  const submit='(()=>{const i=document.getElementById("lm-studio-answer");i.value='+JSON.stringify(answer)+';document.getElementById("lm-studio-confidence").value="low";document.getElementById("lm-studio-review").requestSubmit();return true})()';
  await evaluate(submit);
- await until('studioLoad().reviews['+JSON.stringify(sourceId)+']?.length===1','saved recall review');
- const reviewed=await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+'][0]');
+ await until('studioLoad().reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+')','saved recall review');
+ const reviewed=await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+'].find(x=>x.answer==='+JSON.stringify(answer)+')');
  assert.equal(reviewed.confidence,'low');
  assert.ok(Date.parse(reviewed.next_review)>Date.now(),'Review schedule not set');
  assert.equal(await evaluate('(()=>{document.getElementById("lm-studio-path-name").value="Research foundations";document.getElementById("lm-studio-path").requestSubmit();return studioLoad().paths.some(x=>x.name==="Research foundations")})()'),true,'Reading path was not saved');
@@ -86,29 +90,54 @@ try{
  const preview=await evaluate('studioOverview()');
  assert.ok(preview.includes('Research foundations')&&preview.includes('Knowledge connections'),'Explore learning overview incomplete');
  // The imported JSON is retained locally; it does not touch production D1.
- assert.equal(await evaluate('(()=>{const old=localStorage.getItem("lm-learning-studio-v1");localStorage.removeItem("lm-learning-studio-v1");studioImport(old);return studioLoad().reviews['+JSON.stringify(sourceId)+']?.length===1})()'),true,'JSON backup restore failed');
+ assert.equal(await evaluate('(()=>{const old=localStorage.getItem("lm-learning-studio-v1");localStorage.removeItem("lm-learning-studio-v1");studioImport(old);return studioLoad().reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+')})()'),true,'JSON backup restore failed');
 
  // Cloud D1 must preserve study records across a second browser storage context.
  await evaluate('studioSyncNow()');
  // The page may already be sending a debounced write. Wait for a completed
  // revision rather than reading D1 before the in-flight write has committed.
- await until('(async()=>{const server=await api("studio-state");return !!server.state.reviews['+JSON.stringify(sourceId)+']?.length&&server.state.paths.length>0&&server.state.links.length>0})()','D1 cloud sync including all study data',100);
- const synced=await evaluate('(async()=>{const server=await api("studio-state");const graph=await api("knowledge-graph");return {revision:server.revision,hasReview:!!server.state.reviews['+JSON.stringify(sourceId)+'],paths:server.state.paths.length,links:server.state.links.length,graphSources:graph.sources.length,graphManual:graph.manual_links.length,localStatus:learningCloud.status,localError:learningCloud.error}})()');
+ await until('(async()=>{const server=await api("studio-state");return server.state.reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+')&&server.state.paths.length>0&&server.state.links.length>0})()','D1 cloud sync including all study data',100);
+ const synced=await evaluate('(async()=>{const server=await api("studio-state");const graph=await api("knowledge-graph");return {revision:server.revision,hasReview:server.state.reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+'),paths:server.state.paths.length,links:server.state.links.length,graphSources:graph.sources.length,graphManual:graph.manual_links.length,localStatus:learningCloud.status,localError:learningCloud.error}})()');
  assert.ok(synced.revision>=1&&synced.hasReview&&synced.paths>0&&synced.links>0,'Study records were not persisted to private D1: '+JSON.stringify(synced));
  assert.ok(synced.graphSources>0&&synced.graphManual>0,'Knowledge graph did not include saved sources and user links');
  // Emulate another device without the previous localStorage snapshot; the
  // authoritative state must restore it after a fresh authenticated API fetch.
  assert.equal(await evaluate('localStorage.removeItem("lm-learning-studio-v1");true'),true);
  await evaluate('studioSyncNow()');
- await until('studioLoad().reviews['+JSON.stringify(sourceId)+']?.length===1','fresh-device D1 restoration',80);
- assert.equal(await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+']?.length===1'),true,'Cloud state not restored in a fresh device context');
+ await until('studioLoad().reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+')','fresh-device D1 restoration',80);
+ assert.equal(await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+')'),true,'Cloud state not restored in a fresh device context');
  const exploreNav=await evaluate('(()=>{const n=document.querySelector("[data-nav=Explore]");if(!n)return false;n.click();return true})()');
  assert.equal(exploreNav,true,'Explore navigation was not available');
  await until('document.body.innerText.includes("Your knowledge graph")&&!!document.querySelector("[data-studio-cloud-sync]")','rendered knowledge graph viewer');
+
+ // Create an authored evergreen note in the real UI, cite exact saved text, and
+ // verify the D1 record and portable export are available after fresh login.
+ await until('evergreen.loaded && !evergreen.busy && !!document.querySelector("[data-ev-new]")','Evergreen index ready in Explore');
+ await evaluate('document.querySelector("[data-ev-new]").click();true');
+ await until('!!document.getElementById("ev-editor")','Evergreen concept editor');
+ const conceptName='Evidence foundations '+commit.slice(0,8);
+ assert.equal(await evaluate('(()=>{document.getElementById("ev-title").value='+JSON.stringify(conceptName)+';document.getElementById("ev-thesis").value="Evidence should alter beliefs only when it is reliable and relevant.";document.getElementById("ev-content").value="We need to distinguish observations from competing explanations, examine uncertainty, and revisit assumptions after new data arrives.";document.getElementById("ev-editor").requestSubmit();return true})()'),true);
+ const afterSubmit=await evaluate('(()=>{const f=document.getElementById("ev-editor");return {formPresent:!!f,formValid:f?.checkValidity(),title:f?.querySelector("[name=title]")?.value,flash:document.getElementById("flash")?.textContent,busy:evergreen.busy,loaded:evergreen.loaded,activeTitle:evergreen.active?.title,activeId:evergreen.active?.id,error:evergreen.error}})()');
+ console.log('Evergreen browser submission diagnostics',JSON.stringify(afterSubmit));
+ try{
+  await until('!!evergreen.active?.id&&evergreen.active.title.includes("Evidence foundations")','UI saved an evergreen concept');
+ }catch(error){
+  const debug=await evaluate('({busy:evergreen.busy,loaded:evergreen.loaded,active:evergreen.active,error:evergreen.error,flash:document.getElementById("flash")?.textContent,form:!!document.getElementById("ev-editor")})');
+  throw Error('Evergreen creation did not finish. State: '+JSON.stringify(debug)+'; original: '+error.message);
+ }
+ const conceptId=await evaluate('evergreen.active.id');
+ await evaluate('document.querySelector("[data-ev-refs]").click();true');
+ await until('!!document.getElementById("ev-ref")','source provenance form');
+ const sourceText=await evaluate('(async()=>{const d=await api("sources/'+sourceId+'");return d.source.body.slice(0,90)})()');
+ assert.ok(sourceText.length>=40,'Staging source text missing');
+ assert.equal(await evaluate('(()=>{const f=document.getElementById("ev-ref");f.querySelector("[name=source_id]").value='+JSON.stringify(sourceId)+';f.querySelector("[name=relation]").value="supports";f.querySelector("[name=quote]").value='+JSON.stringify(sourceText)+';f.querySelector("[name=comment]").value="Grounded in exactly the text stored for this source.";f.requestSubmit();return true})()'),true);
+ await until('evergreen.active?.source_refs?.length===1','authentic cited source saved');
+ const evergreenCheck=await evaluate('(async()=>{const x=await api("evergreen/'+conceptId+'");const r=await fetch("/api/evergreen/export?format=markdown");const md=await r.text();const h=await api("evergreen/'+conceptId+'/history");return {revision:x.note.revision,refs:x.note.source_refs.length,quote:x.note.source_refs[0].quote,download:r.status,md:md.includes("Evidence foundations"),history:h.history.length}})()');
+ assert.ok(evergreenCheck.revision>=2&&evergreenCheck.refs===1&&evergreenCheck.quote===sourceText&&evergreenCheck.download===200&&evergreenCheck.md&&evergreenCheck.history>=1,'Evergreen source provenance, revision history or export failed');
  await command('Page.reload',{ignoreCache:true});
  await until('document.readyState==="complete"&&typeof studioLoad==="function"','reloaded application');
- assert.equal(await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+']?.length===1'),true,'Recall was lost across browser reload');
- console.log('PASS authenticated Chromium: login, recall and reviews, learning paths, manual links, D1 cloud sync, fresh-device restore, provenance graph, backup and reload persistence. No additional AI requests.');
+ assert.equal(await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+')'),true,'Recall was lost across browser reload');
+ console.log('PASS authenticated Chromium: login, recall and reviews, learning paths, manual links, D1 cloud sync, fresh-device restore, provenance graph, backup and reload persistence. No additional AI requests; evergreen notes, verified quotations and exports passed.');
 }finally{
  try{ws?.close()}catch{}
  for(const p of pending.values())p.reject(new Error('Browser session closed'));

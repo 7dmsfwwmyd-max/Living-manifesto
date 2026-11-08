@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 const worker=readFileSync('dist/_worker.js','utf8');
 const app=readFileSync('dist/app.js','utf8');
 const checks=[
- ['health version',worker.includes("version:'0.5.5'")],
+ ['health version',worker.includes("version:'0.5.6'")],
  ['authenticated route',worker.includes("researchDossier(req,env,researchMatch[1])")],
  ['research endpoint',worker.includes('async function researchDossier(')],
  ['AI binding',worker.includes('env.CONVERTER.run(')],
@@ -23,6 +23,11 @@ const checks=[
  ['graph endpoint',worker.includes("path==='/api/knowledge-graph'")],
  ['conflict-safe revisions',worker.includes('revision=revision+1')],
  ['synced learning graph interface',app.includes('function graphMarkup()')],
+ ['evergreen concept endpoint',worker.includes("path==='/api/evergreen'")],
+ ['durable note revisions',worker.includes('evergreen_history')],
+ ['source quote verification',worker.includes('evNormalize(s.body)')],
+ ['portable canvas export',worker.includes("format==='markdown'")],
+ ['evergreen note editor',app.includes('function evergreenMarkup()')],
  ['existing article detail',app.includes('function detail()')]
 ];
 for(const [name,ok] of checks)console.log((ok?'PASS':'FAIL')+' '+name);

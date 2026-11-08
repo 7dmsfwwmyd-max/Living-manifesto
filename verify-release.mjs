@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 const worker=readFileSync('dist/_worker.js','utf8');
 const app=readFileSync('dist/app.js','utf8');
 const checks=[
- ['health version',worker.includes("version:'0.5.8'")],
+ ['health version and exact revision',worker.includes("if(path==='/api/health'&&req.method==='GET')return json({ok:true,version:'0.5.8',commit:")],
  ['authenticated route',worker.includes("researchDossier(req,env,researchMatch[1])")],
  ['research endpoint',worker.includes('async function researchDossier(')],
  ['AI binding',worker.includes('env.CONVERTER.run(')],

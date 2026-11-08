@@ -339,3 +339,13 @@ test('Daily briefing UI: escapes untrusted titles and renders independent source
  assert.ok(html.includes('Capture dates are not publication dates'));
  assert.ok(html.includes('data-source="'+id+'"'));
 });
+
+test('Health readiness: exact built Git SHA is embedded in PUBLIC health, not private briefing payload',async()=>{
+ const s=await setup();
+ const health=await (await s.req('health')).json();
+ assert.equal(health.version,'0.5.8');
+ assert.match(health.commit,/^[0-9a-f]{40}$/);
+ const result=await (await s.req('briefing')).json();
+ assert.equal(result.version,'0.5.8');
+ assert.equal(Object.hasOwn(result,'commit'),false,'Source app commit must not be accidentally injected into briefing data');
+});

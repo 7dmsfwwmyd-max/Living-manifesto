@@ -60,8 +60,15 @@ try{
  await until('typeof state!=="undefined"&&state.signedIn===true','authenticated browser session');
  const sourceId=await evaluate('(async()=>{const r=await api("sources");return r.sources.find(x=>String(x.title||"").includes("Release validation '+commit.slice(0,12)+'"))?.id||null})()');
  assert.ok(sourceId,'Staging release fixture is missing');
- const openSource='(async()=>{state.detail=await api("sources/'+sourceId+'");learn.tab="understand";render();return !!document.getElementById("lm-studio-review")})()';
- assert.equal(await evaluate(openSource),true,'Learning Studio did not render for saved article');
+ const nav=await evaluate('(()=>{const n=[...document.querySelectorAll("[data-nav]")].find(x=>/library/i.test(x.textContent));if(n){n.click();return true}return false})()');
+ assert.equal(nav,true,'Library navigation link is unavailable');
+ await until('!!document.querySelector("[data-source]")','library source cards');
+ const opened=await evaluate('(()=>{const n=document.querySelector("[data-source='+sourceId+']");if(n){n.click();return true}return false})()');
+ assert.equal(opened,true,'Staging source was not rendered as a clickable library card');
+ await until('!!document.querySelector("[data-learn-tab=understand]")','article detail navigation');
+ assert.equal(await evaluate('(()=>{document.querySelector("[data-learn-tab=understand]").click();return true})()'),true);
+ await until('!!document.getElementById("lm-studio-review")','Learning Studio in Understand');
+
  assert.equal(await evaluate('(()=>{const n=document.querySelector("[data-studio-reveal]");n?.click();return !!document.body.innerText.includes("Verbatim saved-text excerpt")})()'),true,'Reference reveal did not work');
  const answer='The article argues that evidence should be checked before reaching a conclusion, and alternative explanations should be considered.';
  const submit='(()=>{const i=document.getElementById("lm-studio-answer");i.value='+JSON.stringify(answer)+';document.getElementById("lm-studio-confidence").value="low";document.getElementById("lm-studio-review").requestSubmit();return true})()';

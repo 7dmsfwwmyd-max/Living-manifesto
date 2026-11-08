@@ -48,7 +48,13 @@ assert.match(briefing.methodology,/CAPTURES/);
 const key='source:'+id;
 const hidden=briefing.hidden.find(x=>x.key===key);
 const visible=briefing.items.find(x=>x.key===key);
-const previousRevision=hidden?.revision||visible?.preference_revision||0;
+// Shared staging D1 survives repeated release tests. The source may have a
+// previous RESTORED preference not visible among current top-ranked cards.
+// Read the authenticated private backup to recover its persisted CAS revision,
+// rather than assuming that a previously handled source has revision zero.
+const existingPreferences=(await api('export')).briefing_preferences||[];
+const storedPreference=existingPreferences.find(p=>p.item_key===key);
+const previousRevision=storedPreference?.revision??hidden?.revision??visible?.preference_revision??0;
 const snoozed=await api('briefing/action','POST',{item_key:key,action:'snooze_1d',expected_revision:previousRevision});
 assert.equal(snoozed.revision,previousRevision+1);
 const afterSnooze=await api('briefing');assert.ok(afterSnooze.hidden.some(x=>x.key===key));

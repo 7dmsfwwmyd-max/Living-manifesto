@@ -58,9 +58,10 @@ try{
  const login='(()=>{const f=document.getElementById("login-form");const i=f?.querySelector("input[type=password]");if(!i)return false;i.value='+JSON.stringify(password)+';i.dispatchEvent(new Event("input",{bubbles:true}));f.requestSubmit();return true})()';
  assert.equal(await evaluate(login),true,'Password form missing');
  await until('typeof state!=="undefined"&&state.signedIn===true','authenticated browser session');
+ await until('!!document.querySelector("[data-nav=Library]")','authenticated application shell');
  const sourceId=await evaluate('(async()=>{const r=await api("sources");return r.sources.find(x=>String(x.title||"").includes("Release validation '+commit.slice(0,12)+'"))?.id||null})()');
  assert.ok(sourceId,'Staging release fixture is missing');
- const nav=await evaluate('(()=>{const n=[...document.querySelectorAll("[data-nav]")].find(x=>/library/i.test(x.textContent));if(n){n.click();return true}return false})()');
+ const nav=await evaluate('(()=>{const n=document.querySelector("[data-nav=Library]");if(n){n.click();return true}return false})()');
  assert.equal(nav,true,'Library navigation link is unavailable');
  await until('!!document.querySelector("[data-source]")','library source cards');
  const opened=await evaluate('(()=>{const n=[...document.querySelectorAll("[data-source]")].find(x=>x.dataset.source==='+JSON.stringify(sourceId)+');if(n){n.click();return true}return false})()');

@@ -62,7 +62,7 @@ try{
  let sourceId=await evaluate('(async()=>{const r=await api("sources");const sources=r.sources||[];return (sources.find(x=>String(x.title||"").includes("Release validation '+commit.slice(0,12)+'"))||sources.find(x=>String(x.title||"").startsWith("Release validation ")))?.id||null})()');
  if(!sourceId){
   const seed='Browser-only synthetic learning fixture. An evidence claim needs verifiable text; a plausible explanation should be tested against alternative explanations. '.repeat(4);
-  sourceId=await evaluate('(async()=>{const d=await api("capture",{method:"POST",body:JSON.stringify({title:"Release validation first browser fixture",body:'+JSON.stringify('SEED')+'})});return d.id})()'.replace(JSON.stringify('SEED'),JSON.stringify(seed)));
+  sourceId=await evaluate('(async()=>{const d=await api("capture",{method:"POST",body:JSON.stringify({title:"Release validation first browser fixture",body:'+JSON.stringify(seed)+'})});return d.id})()');
  }
  assert.ok(sourceId,'No synthetic source available for authenticated browser tests');
  const nav=await evaluate('(()=>{const n=document.querySelector("[data-nav=Library]");if(n){n.click();return true}return false})()');
@@ -116,7 +116,7 @@ try{
  await evaluate('document.querySelector("[data-ev-new]").click();true');
  await until('!!document.getElementById("ev-editor")','Evergreen concept editor');
  const conceptName='Evidence foundations '+commit.slice(0,8);
- assert.equal(await evaluate('(()=>{document.getElementById("ev-title").value='+JSON.stringify('CONCEPT_NAME')+';document.getElementById("ev-thesis").value="Evidence should alter beliefs only when it is reliable and relevant.";document.getElementById("ev-content").value="We need to distinguish observations from competing explanations, examine uncertainty, and revisit assumptions after new data arrives.";document.getElementById("ev-editor").requestSubmit();return true})()'.replace(JSON.stringify('CONCEPT_NAME'),JSON.stringify(conceptName))),true);
+ assert.equal(await evaluate('(()=>{document.getElementById("ev-title").value='+JSON.stringify(conceptName)+';document.getElementById("ev-thesis").value="Evidence should alter beliefs only when it is reliable and relevant.";document.getElementById("ev-content").value="We need to distinguish observations from competing explanations, examine uncertainty, and revisit assumptions after new data arrives.";document.getElementById("ev-editor").requestSubmit();return true})()'),true);
  const afterSubmit=await evaluate('(()=>{const f=document.getElementById("ev-editor");return {formPresent:!!f,formValid:f?.checkValidity(),title:f?.querySelector("[name=title]")?.value,flash:document.getElementById("flash")?.textContent,busy:evergreen.busy,loaded:evergreen.loaded,activeTitle:evergreen.active?.title,activeId:evergreen.active?.id,error:evergreen.error}})()');
  console.log('Evergreen browser submission diagnostics',JSON.stringify(afterSubmit));
  try{
@@ -130,7 +130,7 @@ try{
  await until('!!document.getElementById("ev-ref")','source provenance form');
  const sourceText=await evaluate('(async()=>{const d=await api("sources/'+sourceId+'");return d.source.body.slice(0,90)})()');
  assert.ok(sourceText.length>=40,'Staging source text missing');
- assert.equal(await evaluate('(()=>{const f=document.getElementById("ev-ref");f.querySelector("[name=source_id]").value='+JSON.stringify('SOURCE')+';f.querySelector("[name=relation]").value="supports";f.querySelector("[name=quote]").value='+JSON.stringify('QUOTE')+';f.querySelector("[name=comment]").value="Grounded in exactly the text stored for this source.";f.requestSubmit();return true})()'.replace(JSON.stringify('SOURCE'),JSON.stringify(sourceId)).replace(JSON.stringify('QUOTE'),JSON.stringify(sourceText))),true);
+ assert.equal(await evaluate('(()=>{const f=document.getElementById("ev-ref");f.querySelector("[name=source_id]").value='+JSON.stringify(sourceId)+';f.querySelector("[name=relation]").value="supports";f.querySelector("[name=quote]").value='+JSON.stringify(sourceText)+';f.querySelector("[name=comment]").value="Grounded in exactly the text stored for this source.";f.requestSubmit();return true})()'),true);
  await until('evergreen.active?.source_refs?.length===1','authentic cited source saved');
  const evergreenCheck=await evaluate('(async()=>{const x=await api("evergreen/'+conceptId+'");const r=await fetch("/api/evergreen/export?format=markdown");const md=await r.text();const h=await api("evergreen/'+conceptId+'/history");return {revision:x.note.revision,refs:x.note.source_refs.length,quote:x.note.source_refs[0].quote,download:r.status,md:md.includes("Evidence foundations"),history:h.history.length}})()');
  assert.ok(evergreenCheck.revision>=2&&evergreenCheck.refs===1&&evergreenCheck.quote===sourceText&&evergreenCheck.download===200&&evergreenCheck.md&&evergreenCheck.history>=1,'Evergreen source provenance, revision history or export failed');

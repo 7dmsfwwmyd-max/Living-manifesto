@@ -118,7 +118,7 @@ test('Knowledge graph: authentic shared tags, grounded excerpts and manual claim
  assert.ok(shared.mentions.every(x=>x.basis==='idea tag'&&body.includes(x.evidence)));
  assert.equal(g.manual_links[0].kind,'challenges');
  assert.equal(g.manual_links[0].reason,note);
- assert.match(g.disclosure,/not evidence/i);
+ assert.match(g.disclosure,/not proof/i);
  assert.equal(g.sources.some(x=>x.id===first),true);
  assert.equal(g.sources.some(x=>x.id===second),true);
  assert.ok(g.concepts.every(x=>x.mentions.length>=2));

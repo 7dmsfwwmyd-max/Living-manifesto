@@ -83,3 +83,60 @@ test('Learning Studio: client-only recall, paths, links, backup validation and e
  assert.throws(()=>vm.runInContext('studioImport('+JSON.stringify('{"version":2}')+')',context));
  assert.equal(items.get('lm-learning-studio-v1').includes('Investing'),true);
 });
+
+
+test('Learning Studio cloud: authenticated revision-checked D1 sync and export preservation',async()=>{
+ const s=await setup();
+ assert.equal((await s.req('studio-state','GET',undefined,{cookie:''})).status,401);
+ assert.equal((await s.req('studio-state','POST',{expected_revision:0,state:{version:1,reviews:{},paths:[],links:[]}},{Origin:'https://untrusted.example'})).status,403);
+ const initial=await (await s.req('studio-state')).json();assert.equal(initial.revision,0);assert.deepEqual(initial.state,{version:1,reviews:{},paths:[],links:[]});
+ const first=await (await s.req('capture','POST',{body,title:'Source for study'})).json();await Promise.all(s.pending);
+ const v1={version:1,reviews:{[first.id]:[{title:'Source for study',question:'What is the evidence?',answer:'A careful reader compares claims with quotations from the article.',confidence:'medium',created_at:'2026-11-07T11:00:00Z',next_review:'2026-11-10T11:00:00Z'}]},paths:[{name:'Critical reading',items:[{id:first.id,title:'Source for study'}]}],links:[]};
+ const saved=await s.req('studio-state','POST',{expected_revision:0,state:v1});assert.equal(saved.status,200);assert.equal((await saved.json()).revision,1);
+ assert.equal((await s.req('studio-state','POST',{expected_revision:0,state:v1})).status,409,'A stale device must never overwrite the newer state');
+ const restored=await (await s.req('studio-state')).json();assert.equal(restored.revision,1);assert.equal(restored.state.reviews[first.id][0].confidence,'medium');
+ assert.equal((await s.req('studio-state','POST',{expected_revision:1,state:{version:2,reviews:{},paths:[],links:[]}})).status,422);
+ const exportData=await (await s.req('export')).json();assert.ok(exportData.studio_state?.some(x=>JSON.parse(x.content).paths[0].name==='Critical reading'));
+ assert.equal((await (await s.req('sources/'+first.id)).json()).source.body,body,'Existing saved text must not be changed by studying');
+});
+test('Knowledge graph: authentic shared tags, grounded excerpts and manual claim distinctions',async()=>{
+ const s=await setup();
+ const first=(await (await s.req('capture','POST',{body,title:'Bayesian source one'})).json()).id;
+ const second=(await (await s.req('capture','POST',{body,title:'Bayesian source two'})).json()).id;
+ await Promise.all(s.pending);
+ for(const id of [first,second]){
+  s.env.DB.db.prepare('UPDATE sources SET disciplines=? WHERE id=?').run(JSON.stringify(['Reasoning and evidence']),id);
+  s.env.DB.db.prepare('UPDATE ideas SET tags=?,excerpt=? WHERE source_id=?').run(JSON.stringify(['Bayesian reasoning']),body.slice(0,90),id);
+ }
+ const note='Both sources examine inference from evidence but disagree about the weight of the prior.';
+ const saved={version:1,reviews:{},paths:[],links:[{from:first,to:second,fromTitle:'Bayesian one',toTitle:'Bayesian two',kind:'challenges',reason:note}]};
+ assert.equal((await s.req('studio-state','POST',{expected_revision:0,state:saved})).status,200);
+ assert.equal((await s.req('knowledge-graph','GET',undefined,{cookie:''})).status,401);
+ const g=await (await s.req('knowledge-graph')).json();
+ assert.ok(g.concepts.some(x=>x.label==='Bayesian reasoning'&&x.mentions.length===2));
+ const shared=g.concepts.find(x=>x.label==='Bayesian reasoning');
+ assert.ok(shared.mentions.every(x=>x.basis==='idea tag'&&body.includes(x.evidence)));
+ assert.equal(g.manual_links[0].kind,'challenges');
+ assert.equal(g.manual_links[0].reason,note);
+ assert.match(g.disclosure,/not proof/i);
+ assert.equal(g.sources.some(x=>x.id===first),true);
+ assert.equal(g.sources.some(x=>x.id===second),true);
+ assert.ok(g.concepts.every(x=>x.mentions.length>=2));
+});
+test('Synced Learning Studio frontend: conflict-merge preserves offline entries; graph escapes untrusted labels',async()=>{
+ const app={innerHTML:''},storage=new Map(),localStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)};
+ const document={getElementById:()=>app,addEventListener(){},querySelector:()=>null,activeElement:null};
+ const context=vm.createContext({document,navigator:{},location:{protocol:'http:'},fetch:async()=>new Response('',{status:401}),setTimeout:(fn,ms)=>setTimeout(fn,ms).unref(),clearTimeout,console,URL,localStorage});
+ vm.runInContext(readFileSync('dist/app.js','utf8'),context);
+ await new Promise(r=>setTimeout(r,10));
+ const idA='aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',idB='bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
+ const left={version:1,reviews:{[idA]:[{answer:'An initial long answer with evidence.',created_at:'2026-11-01T00:00:00Z'}]},paths:[{name:'Evidence',items:[{id:idA,title:'A'}]}],links:[]};
+ const right={version:1,reviews:{[idA]:[{answer:'A different long answer with evidence.',created_at:'2026-11-02T00:00:00Z'}]},paths:[{name:'Evidence',items:[{id:idB,title:'B'}]}],links:[{from:idA,to:idB,fromTitle:'A',toTitle:'B',kind:'supports',reason:'A source links another source'}]};
+ const merged=vm.runInContext('studioMerge('+JSON.stringify(left)+','+JSON.stringify(right)+')',context);
+ assert.equal(merged.reviews[idA].length,2);assert.equal(merged.paths[0].items.length,2);assert.equal(merged.links.length,1);
+ const malicious='<img src=x onerror=alert(1)>';
+ const graph={sources:[{id:idA,title:'A'},{id:idB,title:'B'}],concepts:[{id:'concept:example',label:malicious,mentions:[{source_id:idA,title:malicious,basis:'idea tag',evidence:malicious},{source_id:idB,title:'B',basis:'analysis discipline',evidence:'Evidence'}]}],manual_links:[],disclosure:''};
+ const html=vm.runInContext('learningCloud.graph='+JSON.stringify(graph)+';graphMarkup()',context);
+ assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'));
+ assert.ok(!html.includes('<img src=x'));
+});

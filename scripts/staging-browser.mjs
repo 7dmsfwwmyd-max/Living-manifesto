@@ -89,16 +89,22 @@ try{
  assert.equal(await evaluate('(()=>{const old=localStorage.getItem("lm-learning-studio-v1");localStorage.removeItem("lm-learning-studio-v1");studioImport(old);return studioLoad().reviews['+JSON.stringify(sourceId)+']?.length===1})()'),true,'JSON backup restore failed');
 
  // Cloud D1 must preserve study records across a second browser storage context.
- const synced=await evaluate('(async()=>{await studioSyncNow();const server=await api("studio-state");const graph=await api("knowledge-graph");return {revision:server.revision,hasReview:!!server.state.reviews['+JSON.stringify('SOURCE_ID')+'],paths:server.state.paths.length,links:server.state.links.length,graphSources:graph.sources.length,graphManual:graph.manual_links.length}})()'.replace(JSON.stringify('SOURCE_ID'),JSON.stringify(sourceId)));
- assert.ok(synced.revision>=1&&synced.hasReview&&synced.paths>0&&synced.links>0,'Study records were not persisted to private D1');
+ await evaluate('studioSyncNow()');
+ // The page may already be sending a debounced write. Wait for a completed
+ // revision rather than reading D1 before the in-flight write has committed.
+ await until('(async()=>{const server=await api("studio-state");return !!server.state.reviews['+JSON.stringify(sourceId)+']?.length&&server.state.paths.length>0&&server.state.links.length>0})()','D1 cloud sync including all study data',100);
+ const synced=await evaluate('(async()=>{const server=await api("studio-state");const graph=await api("knowledge-graph");return {revision:server.revision,hasReview:!!server.state.reviews['+JSON.stringify(sourceId)+'],paths:server.state.paths.length,links:server.state.links.length,graphSources:graph.sources.length,graphManual:graph.manual_links.length,localStatus:learningCloud.status,localError:learningCloud.error}})()');
+ assert.ok(synced.revision>=1&&synced.hasReview&&synced.paths>0&&synced.links>0,'Study records were not persisted to private D1: '+JSON.stringify(synced));
  assert.ok(synced.graphSources>0&&synced.graphManual>0,'Knowledge graph did not include saved sources and user links');
  // Emulate another device without the previous localStorage snapshot; the
  // authoritative state must restore it after a fresh authenticated API fetch.
  assert.equal(await evaluate('localStorage.removeItem("lm-learning-studio-v1");true'),true);
  await evaluate('studioSyncNow()');
+ await until('studioLoad().reviews['+JSON.stringify(sourceId)+']?.length===1','fresh-device D1 restoration',80);
  assert.equal(await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+']?.length===1'),true,'Cloud state not restored in a fresh device context');
- const graphView=await evaluate('(()=>{state.activeSource=null;state.view="Explore";render();return document.body.innerText.includes("Your knowledge graph")&&!!document.querySelector("[data-studio-cloud-sync]")})()');
- assert.equal(graphView,true,'Authenticated knowledge graph viewer not rendered');
+ const exploreNav=await evaluate('(()=>{const n=document.querySelector("[data-nav=Explore]");if(!n)return false;n.click();return true})()');
+ assert.equal(exploreNav,true,'Explore navigation was not available');
+ await until('document.body.innerText.includes("Your knowledge graph")&&!!document.querySelector("[data-studio-cloud-sync]")','rendered knowledge graph viewer');
  await command('Page.reload',{ignoreCache:true});
  await until('document.readyState==="complete"&&typeof studioLoad==="function"','reloaded application');
  assert.equal(await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+']?.length===1'),true,'Recall was lost across browser reload');

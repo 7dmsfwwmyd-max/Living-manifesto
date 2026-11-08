@@ -140,3 +140,57 @@ test('Synced Learning Studio frontend: conflict-merge preserves offline entries;
  assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'));
  assert.ok(!html.includes('<img src=x'));
 });
+
+
+test('Evergreen concepts: authenticated user writing, grounded quotations, version conflict and history',async()=>{
+ const s=await setup();
+ const r1=await (await s.req('capture','POST',{title:'Research Alpha',body})).json();
+ const r2=await (await s.req('capture','POST',{title:'Research Beta',body})).json();
+ await Promise.all(s.pending);
+ assert.equal((await s.req('evergreen','GET',undefined,{cookie:''})).status,401);
+ assert.equal((await s.req('evergreen','POST',{title:'Concept'},{Origin:'https://evil.example'})).status,403);
+ const firstNote={title:'Evidence and inference',thesis:'We should update beliefs when credible evidence is received.',content:'The foundation is to compare what the source actually says to alternative hypotheses, not merely quote conclusions.',source_refs:[],related:[],archived:false};
+ const a=await s.req('evergreen','POST',firstNote);assert.equal(a.status,201);const created=(await a.json()).note;
+ assert.equal(created.revision,1);assert.equal(created.title,firstNote.title);
+ const quote=body.slice(0,90);
+ const withQuote={...firstNote,source_refs:[{source_id:r1.id,relation:'supports',quote,comment:'A verbatim stored excerpt supports this claim.'}]};
+ const saved=await s.req('evergreen/'+created.id,'PUT',{revision:1,note:withQuote});assert.equal(saved.status,200);
+ const note=(await saved.json()).note;assert.equal(note.revision,2);
+ assert.equal(note.source_refs[0].quote,quote);
+ const bad=await s.req('evergreen/'+created.id,'PUT',{revision:2,note:{...withQuote,source_refs:[{source_id:r1.id,relation:'supports',quote:'This is an invented quotation absent from the source.',comment:'Invalid'}]}});assert.equal(bad.status,422);
+ assert.equal((await s.req('evergreen/'+created.id,'PUT',{revision:1,note:withQuote})).status,409);
+ const history=(await (await s.req('evergreen/'+created.id+'/history')).json()).history;assert.equal(history[0].revision,1);
+ assert.equal(JSON.parse(history[0].snapshot).title,firstNote.title);
+ assert.equal((await (await s.req('evergreen/'+created.id)).json()).note.revision,2);
+ const b=(await (await s.req('evergreen','POST',{...firstNote,title:'Prior probabilities'})).json()).note;
+ const withRelated={...withQuote,related:[{note_id:b.id,relation:'qualifies',reason:'This concept explains the role of prior uncertainty.'}]};
+ assert.equal((await s.req('evergreen/'+created.id,'PUT',{revision:2,note:withRelated})).status,200);
+ const copy=(await (await s.req('export')).json());assert.ok(copy.evergreen_notes.some(n=>n.id===created.id));assert.ok(copy.evergreen_history.some(h=>h.note_id===created.id));
+ assert.equal((await (await s.req('sources/'+r1.id)).json()).source.body,body);
+});
+test('Evergreen concepts: portable Markdown, JSON and Canvas reflect only stored sources',async()=>{
+ const s=await setup();const source=(await (await s.req('capture','POST',{title:'Original Source',body})).json()).id;
+ await Promise.all(s.pending);
+ const first={title:'Causal inference',thesis:'Causality needs an argument beyond observational correlation.',content:'Separate observed outcomes from proposed mechanisms and consider plausible confounding variables.',source_refs:[{source_id:source,relation:'supports',quote:body.slice(0,90),comment:'A source excerpt with exact provenance.'}],related:[],archived:false};
+ const note=(await (await s.req('evergreen','POST',first)).json()).note;
+ const md=await s.req('evergreen/export?format=markdown');assert.equal(md.status,200);
+ const text=await md.text();assert.ok(text.includes('Causal inference'));assert.ok(text.includes(body.slice(0,90)));assert.ok(text.includes(source));
+ const canvas=await (await s.req('evergreen/export?format=canvas')).json();
+ assert.ok(canvas.nodes.some(x=>x.id==='note-'+note.id));assert.ok(canvas.nodes.some(x=>x.id==='source-'+source));
+ assert.ok(canvas.edges.some(x=>x.toNode==='source-'+source));
+ const jsonBackup=await (await s.req('evergreen/export?format=json')).json();assert.equal(jsonBackup.format,'evergreen-v1');assert.equal(jsonBackup.notes[0].id,note.id);
+ assert.equal((await s.req('evergreen/export?format=invalid')).status,422);
+ assert.equal((await s.req('evergreen/export?format=json','GET',undefined,{cookie:''})).status,401);
+});
+test('Evergreen interface: author content, URLs and concept labels are HTML-escaped',async()=>{
+ const app={innerHTML:''},document={getElementById:()=>app,addEventListener(){},querySelector:()=>null};
+ const context=vm.createContext({document,navigator:{},location:{protocol:'http:'},fetch:async()=>new Response('',{status:401}),setTimeout:(fn,ms)=>setTimeout(fn,ms).unref(),clearTimeout,console,URL,localStorage:{getItem:()=>null}});
+ vm.runInContext(readFileSync('dist/app.js','utf8'),context);
+ await new Promise(r=>setTimeout(r,10));
+ const malicious='<img src=x onerror=alert(1)>';
+ const note={id:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',title:malicious,thesis:malicious+' is untrusted content',content:malicious+' with a substantive explanation and counterarguments',source_refs:[{source_id:'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb',title:malicious,relation:'supports',quote:malicious,comment:malicious}],related:[],revision:1,archived:false,updated_at:'2026-11-08'};
+ const html=vm.runInContext('evergreen.loaded=true;evergreen.items=['+JSON.stringify(note)+'];evergreen.active='+JSON.stringify(note)+';evergreenMarkup()',context);
+ assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'));assert.ok(!html.includes('<img src=x'));
+ assert.ok(html.includes('Export Markdown')&&html.includes('Export JSON Canvas'));
+ assert.ok(html.includes('Source provenance'));
+});

@@ -105,10 +105,27 @@ try{
  const exploreNav=await evaluate('(()=>{const n=document.querySelector("[data-nav=Explore]");if(!n)return false;n.click();return true})()');
  assert.equal(exploreNav,true,'Explore navigation was not available');
  await until('document.body.innerText.includes("Your knowledge graph")&&!!document.querySelector("[data-studio-cloud-sync]")','rendered knowledge graph viewer');
+
+ // Create an authored evergreen note in the real UI, cite exact saved text, and
+ // verify the D1 record and portable export are available after fresh login.
+ await until('!!document.querySelector("[data-ev-new]")','Evergreen controls in Explore');
+ assert.equal(await evaluate('(()=>{document.querySelector("[data-ev-new]").click();return !!document.getElementById("ev-editor")})()'),true);
+ const conceptName='Evidence foundations '+commit.slice(0,8);
+ assert.equal(await evaluate('(()=>{document.getElementById("ev-title").value='+JSON.stringify('CONCEPT_NAME')+';document.getElementById("ev-thesis").value="Evidence should alter beliefs only when it is reliable and relevant.";document.getElementById("ev-content").value="We need to distinguish observations from competing explanations, examine uncertainty, and revisit assumptions after new data arrives.";document.getElementById("ev-editor").requestSubmit();return true})()'.replace(JSON.stringify('CONCEPT_NAME'),JSON.stringify(conceptName))),true);
+ await until('!!evergreen.active?.id&&evergreen.active.title.includes("Evidence foundations")','UI saved an evergreen concept');
+ const conceptId=await evaluate('evergreen.active.id');
+ await evaluate('document.querySelector("[data-ev-refs]").click();true');
+ await until('!!document.getElementById("ev-ref")','source provenance form');
+ const sourceText=await evaluate('(async()=>{const d=await api("sources/'+sourceId+'");return d.source.body.slice(0,90)})()');
+ assert.ok(sourceText.length>=40,'Staging source text missing');
+ assert.equal(await evaluate('(()=>{const f=document.getElementById("ev-ref");f.querySelector("[name=source_id]").value='+JSON.stringify('SOURCE')+';f.querySelector("[name=relation]").value="supports";f.querySelector("[name=quote]").value='+JSON.stringify('QUOTE')+';f.querySelector("[name=comment]").value="Grounded in exactly the text stored for this source.";f.requestSubmit();return true})()'.replace(JSON.stringify('SOURCE'),JSON.stringify(sourceId)).replace(JSON.stringify('QUOTE'),JSON.stringify(sourceText))),true);
+ await until('evergreen.active?.source_refs?.length===1','authentic cited source saved');
+ const evergreenCheck=await evaluate('(async()=>{const x=await api("evergreen/'+conceptId+'");const r=await fetch("/api/evergreen/export?format=markdown");const md=await r.text();const h=await api("evergreen/'+conceptId+'/history");return {revision:x.note.revision,refs:x.note.source_refs.length,quote:x.note.source_refs[0].quote,download:r.status,md:md.includes("Evidence foundations"),history:h.history.length}})()');
+ assert.ok(evergreenCheck.revision>=2&&evergreenCheck.refs===1&&evergreenCheck.quote===sourceText&&evergreenCheck.download===200&&evergreenCheck.md&&evergreenCheck.history>=1,'Evergreen source provenance, revision history or export failed');
  await command('Page.reload',{ignoreCache:true});
  await until('document.readyState==="complete"&&typeof studioLoad==="function"','reloaded application');
  assert.equal(await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+']?.length===1'),true,'Recall was lost across browser reload');
- console.log('PASS authenticated Chromium: login, recall and reviews, learning paths, manual links, D1 cloud sync, fresh-device restore, provenance graph, backup and reload persistence. No additional AI requests.');
+ console.log('PASS authenticated Chromium: login, recall and reviews, learning paths, manual links, D1 cloud sync, fresh-device restore, provenance graph, backup and reload persistence. No additional AI requests; evergreen notes, verified quotations and exports passed.');
 }finally{
  try{ws?.close()}catch{}
  for(const p of pending.values())p.reject(new Error('Browser session closed'));

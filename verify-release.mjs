@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 const worker=readFileSync('dist/_worker.js','utf8');
 const app=readFileSync('dist/app.js','utf8');
 const checks=[
- ['health version',worker.includes("version:'0.5.3'")],
+ ['health version',worker.includes("version:'0.5.4'")],
  ['authenticated route',worker.includes("researchDossier(req,env,researchMatch[1])")],
  ['research endpoint',worker.includes('async function researchDossier(')],
  ['AI binding',worker.includes('env.CONVERTER.run(')],
@@ -16,6 +16,9 @@ const checks=[
  ['deep dive render',app.includes('function dossierMarkup(s)')],
  ['deep dive click handler',app.includes('dataset.researchGenerate')],
  ['existing library',app.includes('function library()')],
+ ['learning studio rendered',app.includes('function studioMarkup(s)')],
+ ['learning dashboard rendered',app.includes('function studioOverview()')],
+ ['study source connections',app.includes('lm-studio-link')],
  ['existing article detail',app.includes('function detail()')]
 ];
 for(const [name,ok] of checks)console.log((ok?'PASS':'FAIL')+' '+name);

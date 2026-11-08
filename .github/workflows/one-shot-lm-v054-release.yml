@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   promote:
-    if: ${{ github.ref == 'refs/heads/main' && github.event.head_commit.message == 'release: one-shot approved Living Manifesto v0.5.4' }}
+    if: "${{ github.ref == 'refs/heads/main' && github.event.head_commit.message == 'release: one-shot approved Living Manifesto v0.5.4' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:

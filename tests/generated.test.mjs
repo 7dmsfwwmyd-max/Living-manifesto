@@ -264,3 +264,78 @@ test('Claim–evidence ledger frontend: source claims and processing errors are 
  assert.ok(!overview.includes('<img src=x'));
  assert.ok(overview.includes('Manual review required'));
 });
+
+
+test('Daily briefing: prioritises captured-not-published sources, due recall and uncited concepts without new model calls',async()=>{
+ const s=await setup();
+ const source=(await (await s.req('capture','POST',{title:'Evidence and learning',body})).json()).id;
+ await Promise.all(s.pending);
+ const before=s.calls();
+ const first=await s.req('briefing');
+ assert.equal(first.status,200);
+ const data=await first.json();
+ assert.equal(data.version,'0.5.8');assert.equal(data.limits.sources,100);
+ assert.match(data.methodology,/CAPTURES/);
+ assert.ok(data.items.some(x=>x.key==='source:'+source&&x.kind==='reading'));
+ assert.ok(data.items.find(x=>x.key==='source:'+source).why.includes('not its publication date'));
+ assert.ok(!data.items.some(x=>x.key==='evidence:'+source),'Recorded source audit must not be described as missing');
+ assert.equal(s.calls(),before,'The briefing must not make model inference requests');
+ const due=new Date(Date.now()-86400000).toISOString(),stamp=new Date().toISOString();
+ const studio={version:1,reviews:{[source]:[{title:'Evidence and learning',question:'What changed?',answer:'The evidence requires revisiting the explanation and its assumptions.',confidence:'low',created_at:stamp,next_review:due}]},paths:[{name:'Research',items:[{id:source,title:'Evidence and learning'}]}],links:[]};
+ s.env.DB.db.prepare('CREATE TABLE IF NOT EXISTS studio_state (key TEXT PRIMARY KEY,content TEXT NOT NULL,revision INTEGER NOT NULL,updated_at TEXT NOT NULL)').run();
+ s.env.DB.db.prepare("INSERT INTO studio_state(key,content,revision,updated_at) VALUES('owner',?,1,?)").run(JSON.stringify(studio),stamp);
+ const next=await (await s.req('briefing')).json();
+ assert.ok(next.items.some(x=>x.key==='review:'+source&&x.kind==='review'));
+ assert.ok(!next.items.some(x=>x.key==='source:'+source),'Already studied sources must not masquerade as unread');
+ const evergreen={title:'Theory of evidence',thesis:'A thesis should change when better evidence becomes available.',content:'Evidence quality must be evaluated separately from the plausibility of a claim.',source_refs:[],related:[],archived:false};
+ const note=(await (await s.req('evergreen','POST',evergreen)).json()).note;
+ const last=await (await s.req('briefing')).json();
+ assert.ok(last.items.some(x=>x.key==='concept:'+note.id&&x.kind==='concept'));
+ assert.equal(s.calls(),before);
+});
+test('Daily briefing: preference revisions, snoozes, restoring and authenticated privacy',async()=>{
+ const s=await setup(),source=(await (await s.req('capture','POST',{title:'Preference fixture',body})).json()).id;await Promise.all(s.pending);
+ assert.equal((await s.req('briefing','GET',undefined,{cookie:''})).status,401);
+ assert.equal((await s.req('briefing/action','POST',{item_key:'source:'+source,action:'dismiss',expected_revision:0},{cookie:''})).status,401);
+ assert.equal((await s.req('briefing/action','POST',{item_key:'source:'+source,action:'dismiss',expected_revision:0},{Origin:'https://other.example'})).status,403);
+ assert.equal(s.env.DB.db.prepare("SELECT name FROM sqlite_master WHERE name='briefing_preferences'").get(),undefined,'GET must not create tables');
+ const item='source:'+source;
+ let update=await s.req('briefing/action','POST',{item_key:item,action:'snooze_1d',expected_revision:0});
+ assert.equal(update.status,200);assert.equal((await update.json()).revision,1);
+ let data=await (await s.req('briefing')).json();assert.ok(!data.items.some(x=>x.key===item));assert.ok(data.hidden.some(x=>x.key===item&&x.revision===1));
+ assert.equal((await s.req('briefing/action','POST',{item_key:item,action:'dismiss',expected_revision:0})).status,409,'Stale device must not overwrite hidden state');
+ assert.equal((await s.req('briefing/action','POST',{item_key:'invalid key',action:'restore',expected_revision:0})).status,422);
+ assert.equal((await s.req('briefing/action','POST',{item_key:item,action:'nonsense',expected_revision:1})).status,422);
+ update=await s.req('briefing/action','POST',{item_key:item,action:'restore',expected_revision:1});assert.equal(update.status,200);
+ data=await (await s.req('briefing')).json();
+ assert.ok(data.items.some(x=>x.key===item&&x.preference_revision===2));
+ assert.ok(!data.hidden.some(x=>x.key===item));
+ const backup=await (await s.req('export')).json();assert.ok(backup.briefing_preferences.some(x=>x.item_key===item));
+});
+test('Daily briefing: incomplete sources and explicit user-authored connections are not presented as verified',async()=>{
+ const s=await setup(),a=(await (await s.req('capture','POST',{title:'First source',body})).json()).id;
+ const b=(await (await s.req('capture','POST',{title:'Other source',body})).json()).id;await Promise.all(s.pending);
+ const problem='<img src=x onerror=alert(1)>';
+ s.env.DB.db.prepare("UPDATE sources SET status='failed',attempts=3,error=? WHERE id=?").run(problem,a);
+ s.env.DB.db.prepare('CREATE TABLE IF NOT EXISTS studio_state (key TEXT PRIMARY KEY,content TEXT NOT NULL,revision INTEGER NOT NULL,updated_at TEXT NOT NULL)').run();
+ const state={version:1,reviews:{},paths:[],links:[{from:a,to:b,fromTitle:'First source',toTitle:'Other source',kind:'challenges',reason:'The second article challenges the mechanisms claimed in the first.'}]};
+ s.env.DB.db.prepare("INSERT INTO studio_state(key,content,revision,updated_at) VALUES('owner',?,1,?)").run(JSON.stringify(state),new Date().toISOString());
+ const result=await (await s.req('briefing')).json();
+ assert.ok(result.items.some(x=>x.key==='processing:'+a&&x.explanation.includes(problem)));
+ assert.ok(result.items.some(x=>x.kind==='connection'&&x.why.includes('you wrote')&&x.why.includes('not AI-confirmed')));
+ assert.ok(result.items.every(x=>!x.why.includes('published today')));
+ assert.equal((await s.req('briefing','POST',{})).status,405);
+});
+test('Daily briefing UI: escapes untrusted titles and renders independent source actions',async()=>{
+ const app={innerHTML:''},document={getElementById:()=>app,addEventListener(){},querySelector:()=>null};
+ const context=vm.createContext({document,navigator:{},location:{protocol:'http:'},fetch:async()=>new Response('',{status:401}),setTimeout:(fn,ms)=>setTimeout(fn,ms).unref(),clearTimeout,console,URL,localStorage:{getItem:()=>null}});
+ vm.runInContext(readFileSync('dist/app.js','utf8'),context);
+ await new Promise(r=>setTimeout(r,10));
+ const evil='<img src=x onerror=alert(1)>',id='aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
+ const report={version:'0.5.8',generated_at:new Date().toISOString(),counts:{due_reviews:1,processing:1,concepts_missing_sources:0},items:[{key:'processing:'+id,kind:'processing',title:evil,explanation:evil,why:evil,source_id:id,preference_revision:0,action_label:'Inspect processing'}],hidden:[]};
+ const html=vm.runInContext('briefing.data='+JSON.stringify(report)+';briefingMarkup()',context);
+ assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'));assert.ok(!html.includes('<img src=x'));
+ assert.ok(html.includes('Snooze 1 day')&&html.includes('Dismiss'));
+ assert.ok(html.includes('Capture dates are not publication dates'));
+ assert.ok(html.includes('data-source="'+id+'"'));
+});

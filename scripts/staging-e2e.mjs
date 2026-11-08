@@ -40,6 +40,22 @@ assert.ok(analysed.ideas.some(i=>i.excerpt&&text.toLowerCase().includes(i.excerp
 await api('login','POST',{password:process.env.APP_PASSWORD});
 assert.deepEqual((await api('sources/'+id)).ideas,analysed.ideas);
 console.log('PASS automatic capture analysis, grounded ideas and fresh-login persistence');
+// The briefing must work on private D1 records and never request another model.
+// Its source dates are capture times, not inferred publication dates.
+const briefing=await api('briefing');
+assert.equal(briefing.version,'0.5.8');assert.ok(Array.isArray(briefing.items));
+assert.match(briefing.methodology,/CAPTURES/);
+const key='source:'+id;
+const hidden=briefing.hidden.find(x=>x.key===key);
+const visible=briefing.items.find(x=>x.key===key);
+const previousRevision=hidden?.revision||visible?.preference_revision||0;
+const snoozed=await api('briefing/action','POST',{item_key:key,action:'snooze_1d',expected_revision:previousRevision});
+assert.equal(snoozed.revision,previousRevision+1);
+const afterSnooze=await api('briefing');assert.ok(afterSnooze.hidden.some(x=>x.key===key));
+const restored=await api('briefing/action','POST',{item_key:key,action:'restore',expected_revision:snoozed.revision});
+assert.equal(restored.revision,snoozed.revision+1);
+console.log('PASS private Daily Intelligence Briefing, capture-date attribution, CAS snooze/restore and no extra AI requests.');
+
 // No paid calls: verify deterministic source excerpts and saved audit record.
 const checked=await api('sources/'+id+'/evidence');
 assert.ok(checked.audit.counts.claims>0&&checked.audit.counts.anchored>0,'No anchored evidence excerpts');

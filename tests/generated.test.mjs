@@ -57,3 +57,29 @@ test('topics: independent scholarly retrieval works when general search is block
  const s=await setup(),old=globalThis.fetch;delete s.env.CONVERTER;
  try{globalThis.fetch=async url=>String(url).includes('api.crossref.org')?Response.json({message:{items:[{title:['Evidence and inference'],URL:'https://doi.org/10.1234/example',author:[{given:'A',family:'Scholar'}]}]}}):new Response('unavailable',{status:503});const r=await s.req('topics','POST',{topic:'Evidence'});assert.equal(r.status,200);const d=await r.json();assert.equal(d.resources[0].kind,'Paper / book');assert.equal(d.ranked,false);assert.ok(d.coverage.some(x=>x.kind==='Web / blog'&&x.status.includes('limited')))}finally{globalThis.fetch=old}
 });
+
+
+test('Learning Studio: client-only recall, paths, links, backup validation and escaped markup',async()=>{
+ const app={innerHTML:''},items=new Map();
+ const storage={getItem:k=>items.get(k)||null,setItem:(k,v)=>items.set(k,v)};
+ const document={getElementById:()=>app,addEventListener(){},querySelector:()=>null};
+ const context=vm.createContext({document,navigator:{},location:{protocol:'http:'},fetch:async()=>new Response('',{status:401}),setTimeout:(fn,ms)=>setTimeout(fn,ms).unref(),clearTimeout,console,URL,localStorage:storage});
+ vm.runInContext(readFileSync('dist/app.js','utf8'),context);
+ await new Promise(r=>setTimeout(r,10));
+ assert.match(app.innerHTML,/login-form/);
+ const source={id:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',title:'<script>alert(1)</script>',body:'<b>Untrusted source evidence</b>'};
+ const html=vm.runInContext('studioMarkup('+JSON.stringify(source)+')',context);
+ assert.ok(html.includes('Learning Studio'));
+ assert.ok(!html.includes('<script>'));
+ assert.ok(html.includes('Can you explain it without looking?'));
+ assert.ok(html.includes('Save answer and schedule review'));
+ assert.ok(html.includes('Connect this source to another'));
+ const backup={version:1,reviews:{[source.id]:[{title:source.title,answer:'This is a review answer with adequate detail.',confidence:'high',next_review:new Date().toISOString()}]},paths:[{name:'Investing',items:[{id:source.id,title:source.title}]}],links:[]};
+ vm.runInContext('studioImport('+JSON.stringify(JSON.stringify(backup))+')',context);
+ assert.ok(items.get('lm-learning-studio-v1').includes('Investing'));
+ const summary=vm.runInContext('studioOverview()',context);
+ assert.ok(summary.includes('&lt;script&gt;')&& !summary.includes('<script>'));
+ assert.ok(summary.includes('review(s) due'));
+ assert.throws(()=>vm.runInContext('studioImport('+JSON.stringify('{"version":2}')+')',context));
+ assert.equal(items.get('lm-learning-studio-v1').includes('Investing'),true);
+});

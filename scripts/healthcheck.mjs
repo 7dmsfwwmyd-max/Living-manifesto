@@ -4,8 +4,19 @@ if(!base||!base.startsWith('https://'))throw Error('Set APP_URL to the verified 
 const expected=process.env.EXPECTED_SHA;
 if(!expected)throw Error('EXPECTED_SHA is required');
 async function get(path,cookie=''){const r=await fetch(new URL(path,base),{headers:{cookie,'Cache-Control':'no-cache'},redirect:'error',signal:AbortSignal.timeout(30000)});assert.equal(r.status,200,'HTTP failure at '+path);return r}
-const health=await (await get('/api/health')).json();assert.equal(health.version,'0.5.3');assert.equal(health.commit,expected);
-const release=await (await get('/release.json')).json();assert.equal(release.commit,expected);assert.equal(release.version,health.version);
+// Cloudflare edge nodes can temporarily serve adjacent immutable deployments.
+// Read-only bounded retries are safe; fail closed if the desired release never appears.
+let health,release,matched=false;
+for(let attempt=0;attempt<12;attempt++){
+  const stamp='?release='+encodeURIComponent(expected)+'&attempt='+attempt;
+  try{
+    health=await (await get('/api/health'+stamp)).json();
+    release=await (await get('/release.json'+stamp)).json();
+    if(health.version==='0.5.4'&&release.version===health.version&&health.commit===expected&&release.commit===expected){matched=true;break}
+  }catch(error){if(attempt===11)throw error}
+  if(attempt<11)await new Promise(resolve=>setTimeout(resolve,2000));
+}
+assert.ok(matched,'Release mismatch after edge-propagation window. Health='+health?.commit+' asset='+release?.commit+' expected='+expected);
 for(const path of ['/','/app.js','/styles.css','/service-worker.js'])await get(path);
 assert.equal((await fetch(new URL('/api/sources',base),{redirect:'error'})).status,401);
 if(!process.env.APP_PASSWORD)throw Error('APP_PASSWORD required for authenticated health checks');

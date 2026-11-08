@@ -29,6 +29,7 @@ try{
  let ready=false;for(let attempt=0;attempt<30;attempt++){try{const r=await fetch(base+'/api/health',{signal:AbortSignal.timeout(10000)});if(r.ok&&(await r.json()).commit===process.env.GITHUB_SHA){ready=true;break}}catch{}await new Promise(r=>setTimeout(r,2000))}assert.ok(ready,'Staging did not serve the expected release within readiness window');
  execFileSync(process.execPath,['scripts/healthcheck.mjs'],{stdio:'inherit',env});
  execFileSync(process.execPath,['scripts/staging-e2e.mjs'],{stdio:'inherit',env});
+ execFileSync(process.execPath,['scripts/staging-browser.mjs'],{stdio:'inherit',env});
  await writeFile('staging-validation.json',JSON.stringify({commit:process.env.GITHUB_SHA,url:base,database_id:db.uuid,passed:true,validated_at:new Date().toISOString()},null,2));
  console.log('STAGING_VALIDATED',base);
 }finally{await rm(temp,{recursive:true,force:true})}

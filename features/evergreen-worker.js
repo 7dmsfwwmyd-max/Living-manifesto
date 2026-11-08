@@ -85,7 +85,7 @@ async function evExport(req,env){
  if(format==='json')return json({format:'evergreen-v1',notes,exported_at:now()});
  if(format==='markdown'){
   const markdown=notes.map(n=>{
-   const refs=n.source_refs.map(s=>'* '+s.relation+': '+s.title+(s.url?' ('+s.url+')':'')+(s.quote?'\n  > '+s.quote:'')+(s.comment?'\n  - '+s.comment:'')).join('\n');
+   const refs=n.source_refs.map(s=>'* '+s.relation+': '+s.title+' [source '+s.source_id+']'+(s.url?' ('+s.url+')':'')+(s.quote?'\n  > '+s.quote:'')+(s.comment?'\n  - '+s.comment:'')).join('\n');
    const linked=n.related.map(x=>'* '+x.relation+' [['+x.title+']] — '+x.reason).join('\n');
    return '# '+n.title+'\n\nID: '+n.id+' | Revision: '+n.revision+' | '+(n.archived?'Archived':'Active')+'\n\n## Core claim\n\n'+n.thesis+'\n\n## Working explanation\n\n'+n.content+'\n\n## Cited source material\n\n'+(refs||'No citations yet')+'\n\n## Related concepts\n\n'+(linked||'No relationships yet');
   }).join('\n\n---\n\n');

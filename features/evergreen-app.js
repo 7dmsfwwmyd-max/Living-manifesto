@@ -15,7 +15,7 @@ function evergreenMarkup(){
  let h='<article class="card" style="margin:20px 0"><div class="section-label">Living knowledge · evergreen concepts</div><h2>Develop an idea across sources</h2>'+
   '<p class="small muted">Evergreen notes are your evolving explanations, not another article summary. Keep claims, uncertainties and cited original evidence distinct. Every edit has a saved revision; there are no additional AI calls.</p>';
  if(evergreen.error)h+='<p role="alert">'+evEscape(evergreen.error)+'</p>';
- h+='<div class="actions"><button class="btn small" data-ev-new="1">New concept</button>'+
+ h+='<div class="actions"><button class="btn small" data-ev-new="1" '+(!evergreen.loaded?'disabled':'')+'>New concept</button>'+
   '<button class="btn small" data-ev-refresh="1">Refresh</button>'+
   '<button class="btn small" data-ev-export="markdown">Export Markdown</button>'+
   '<button class="btn small" data-ev-export="json">Export JSON</button>'+

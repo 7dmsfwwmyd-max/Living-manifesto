@@ -108,8 +108,9 @@ try{
 
  // Create an authored evergreen note in the real UI, cite exact saved text, and
  // verify the D1 record and portable export are available after fresh login.
- await until('!!document.querySelector("[data-ev-new]")','Evergreen controls in Explore');
- assert.equal(await evaluate('(()=>{document.querySelector("[data-ev-new]").click();return !!document.getElementById("ev-editor")})()'),true);
+ await until('evergreen.loaded && !evergreen.busy && !!document.querySelector("[data-ev-new]")','Evergreen index ready in Explore');
+ await evaluate('document.querySelector("[data-ev-new]").click();true');
+ await until('!!document.getElementById("ev-editor")','Evergreen concept editor');
  const conceptName='Evidence foundations '+commit.slice(0,8);
  assert.equal(await evaluate('(()=>{document.getElementById("ev-title").value='+JSON.stringify('CONCEPT_NAME')+';document.getElementById("ev-thesis").value="Evidence should alter beliefs only when it is reliable and relevant.";document.getElementById("ev-content").value="We need to distinguish observations from competing explanations, examine uncertainty, and revisit assumptions after new data arrives.";document.getElementById("ev-editor").requestSubmit();return true})()'.replace(JSON.stringify('CONCEPT_NAME'),JSON.stringify(conceptName))),true);
  await until('!!evergreen.active?.id&&evergreen.active.title.includes("Evidence foundations")','UI saved an evergreen concept');

@@ -4,7 +4,7 @@ if(!base||!base.startsWith('https://'))throw Error('Set APP_URL to the verified 
 const expected=process.env.EXPECTED_SHA;
 if(!expected)throw Error('EXPECTED_SHA is required');
 async function get(path,cookie=''){const r=await fetch(new URL(path,base),{headers:{cookie,'Cache-Control':'no-cache'},redirect:'error',signal:AbortSignal.timeout(30000)});assert.equal(r.status,200,'HTTP failure at '+path);return r}
-const health=await (await get('/api/health')).json();assert.equal(health.version,'0.5.3');assert.equal(health.commit,expected);
+const health=await (await get('/api/health')).json();assert.equal(health.version,'0.5.4');assert.equal(health.commit,expected);
 const release=await (await get('/release.json')).json();assert.equal(release.commit,expected);assert.equal(release.version,health.version);
 for(const path of ['/','/app.js','/styles.css','/service-worker.js'])await get(path);
 assert.equal((await fetch(new URL('/api/sources',base),{redirect:'error'})).status,401);

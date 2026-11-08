@@ -113,7 +113,14 @@ try{
  await until('!!document.getElementById("ev-editor")','Evergreen concept editor');
  const conceptName='Evidence foundations '+commit.slice(0,8);
  assert.equal(await evaluate('(()=>{document.getElementById("ev-title").value='+JSON.stringify('CONCEPT_NAME')+';document.getElementById("ev-thesis").value="Evidence should alter beliefs only when it is reliable and relevant.";document.getElementById("ev-content").value="We need to distinguish observations from competing explanations, examine uncertainty, and revisit assumptions after new data arrives.";document.getElementById("ev-editor").requestSubmit();return true})()'.replace(JSON.stringify('CONCEPT_NAME'),JSON.stringify(conceptName))),true);
- await until('!!evergreen.active?.id&&evergreen.active.title.includes("Evidence foundations")','UI saved an evergreen concept');
+ const afterSubmit=await evaluate('(()=>{const f=document.getElementById("ev-editor");return {formPresent:!!f,formValid:f?.checkValidity(),title:f?.querySelector("[name=title]")?.value,flash:document.getElementById("flash")?.textContent,busy:evergreen.busy,loaded:evergreen.loaded,activeTitle:evergreen.active?.title,activeId:evergreen.active?.id,error:evergreen.error}})()');
+ console.log('Evergreen browser submission diagnostics',JSON.stringify(afterSubmit));
+ try{
+  await until('!!evergreen.active?.id&&evergreen.active.title.includes("Evidence foundations")','UI saved an evergreen concept');
+ }catch(error){
+  const debug=await evaluate('({busy:evergreen.busy,loaded:evergreen.loaded,active:evergreen.active,error:evergreen.error,flash:document.getElementById("flash")?.textContent,form:!!document.getElementById("ev-editor")})');
+  throw Error('Evergreen creation did not finish. State: '+JSON.stringify(debug)+'; original: '+error.message);
+ }
  const conceptId=await evaluate('evergreen.active.id');
  await evaluate('document.querySelector("[data-ev-refs]").click();true');
  await until('!!document.getElementById("ev-ref")','source provenance form');

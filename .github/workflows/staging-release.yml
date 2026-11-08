@@ -2,13 +2,15 @@ name: Build and validate isolated staging
 on:
   push:
     branches: ['main', 'stabilise/v051-release', 'feature/**']
-    paths: ['deploy.mjs', '*-patch.mjs', 'scripts/build.mjs', 'scripts/validate-release.mjs', 'scripts/deploy-staging.mjs', 'scripts/staging-e2e.mjs', 'scripts/staging-browser.mjs', 'scripts/healthcheck.mjs', 'tests/**', 'features/**', 'wrangler.jsonc']
+    paths: ['.github/workflows/staging-release.yml', 'deploy.mjs', '*-patch.mjs', 'scripts/build.mjs', 'scripts/validate-release.mjs', 'scripts/deploy-staging.mjs', 'scripts/staging-e2e.mjs', 'scripts/staging-browser.mjs', 'scripts/healthcheck.mjs', 'tests/**', 'features/**', 'wrangler.jsonc']
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
   group: living-manifesto-staging
-  cancel-in-progress: false
+  # A newer push supersedes an obsolete CI test but never runs two deployments
+  # against the shared staging Worker/D1 simultaneously.
+  cancel-in-progress: true
 jobs:
   staging:
     runs-on: ubuntu-latest

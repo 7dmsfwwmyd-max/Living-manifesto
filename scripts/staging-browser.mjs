@@ -73,6 +73,10 @@ try{
  await until('!!document.querySelector("[data-learn-tab=understand]")','article detail navigation');
  assert.equal(await evaluate('(()=>{document.querySelector("[data-learn-tab=understand]").click();return true})()'),true);
  await until('!!document.getElementById("lm-studio-review")','Learning Studio in Understand');
+ await until('!!document.querySelector("[data-evidence-record]")','Evidence ledger in saved source');
+ const auditResult=await evaluate('(async()=>{const r=await api("sources/'+sourceId+'/evidence",{method:"POST",body:"{}"});return {recorded:r.recorded,hash:r.audit.source.source_hash,claims:r.audit.counts.claims,verifiedClaims:r.audit.claims.filter(c=>c.claim_verified).length}})()');
+ assert.ok(auditResult.recorded&&auditResult.hash.length===64&&auditResult.verifiedClaims===0,'Grounded evidence ledger failed in real authenticated browser');
+
 
  assert.equal(await evaluate('(()=>{const n=document.querySelector("[data-studio-reveal]");n?.click();return !!document.body.innerText.includes("Verbatim saved-text excerpt")})()'),true,'Reference reveal did not work');
  const answer='The article argues that evidence should be checked before reaching a conclusion, and alternative explanations should be considered. Tested on '+commit.slice(0,12);

@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 const worker=readFileSync('dist/_worker.js','utf8');
 const app=readFileSync('dist/app.js','utf8');
 const checks=[
- ['health version',worker.includes("version:'0.5.6'")],
+ ['health version',worker.includes("version:'0.5.7'")],
  ['authenticated route',worker.includes("researchDossier(req,env,researchMatch[1])")],
  ['research endpoint',worker.includes('async function researchDossier(')],
  ['AI binding',worker.includes('env.CONVERTER.run(')],
@@ -28,6 +28,12 @@ const checks=[
  ['source quote verification',worker.includes('evNormalize(s.body)')],
  ['portable canvas export',worker.includes("format==='markdown'")],
  ['evergreen note editor',app.includes('function evergreenMarkup()')],
+ ['source evidence route',worker.includes('elAuditRoute(req,env,evidenceMatch[1])')],
+ ['deterministic provenance',worker.includes('function elNormalize')||worker.includes('const elNormalize')],
+ ['audit persistence',worker.includes('evidence_audits')],
+ ['audit after automatic analysis',worker.includes('await elPersist(env,uid)')],
+ ['evidence source detail',app.includes('function evidenceMarkup(s)')],
+ ['workflow status in Explore',app.includes('function evidenceOverviewMarkup()')],
  ['existing article detail',app.includes('function detail()')]
 ];
 for(const [name,ok] of checks)console.log((ok?'PASS':'FAIL')+' '+name);

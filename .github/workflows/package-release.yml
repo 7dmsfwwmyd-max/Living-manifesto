@@ -17,9 +17,9 @@ jobs:
       - name: Build and test the complete generated application
         run: node scripts/build.mjs
       - name: Package exact tested files
-        run: cd dist && zip -qr ../living-manifesto-v0.5.7-cloudflare.zip .
+        run: cd dist && zip -qr ../living-manifesto-v0.5.8-cloudflare.zip .
       - uses: actions/upload-artifact@v4
         with:
-          name: living-manifesto-v0.5.7-${{ github.sha }}
-          path: living-manifesto-v0.5.7-cloudflare.zip
+          name: living-manifesto-v0.5.8-${{ github.sha }}
+          path: living-manifesto-v0.5.8-cloudflare.zip
           retention-days: 90

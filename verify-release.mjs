@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 const worker=readFileSync('dist/_worker.js','utf8');
 const app=readFileSync('dist/app.js','utf8');
 const checks=[
- ['health version',worker.includes("version:'0.5.7'")],
+ ['health version and exact revision',worker.includes("if(path==='/api/health'&&req.method==='GET')return json({ok:true,version:'0.5.8',commit:")],
  ['authenticated route',worker.includes("researchDossier(req,env,researchMatch[1])")],
  ['research endpoint',worker.includes('async function researchDossier(')],
  ['AI binding',worker.includes('env.CONVERTER.run(')],
@@ -34,6 +34,11 @@ const checks=[
  ['audit after automatic analysis',worker.includes('await elPersist(env,uid)')],
  ['evidence source detail',app.includes('function evidenceMarkup(s)')],
  ['workflow status in Explore',app.includes('function evidenceOverviewMarkup()')],
+ ['authenticated private briefing',worker.includes("path==='/api/briefing'")],
+ ['conflict-safe briefing preferences',worker.includes('briefing_preferences')&&worker.includes('p.expected_revision')],
+ ['no model-inference briefing ranking',worker.includes('async function brRead(env)')],
+ ['intellectual briefing Today interface',app.includes('function briefingMarkup()')],
+ ['briefing snooze and restore',app.includes('data-brief-action=')],
  ['existing article detail',app.includes('function detail()')]
 ];
 for(const [name,ok] of checks)console.log((ok?'PASS':'FAIL')+' '+name);

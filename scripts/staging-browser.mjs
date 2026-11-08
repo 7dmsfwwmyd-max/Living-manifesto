@@ -59,6 +59,18 @@ try{
  assert.equal(await evaluate(login),true,'Password form missing');
  await until('typeof state!=="undefined"&&state.signedIn===true','authenticated browser session');
  await until('!!document.querySelector("[data-nav=Library]")','authenticated application shell');
+ // The Today screen must render the deterministic agenda in a logged-in browser.
+ await until('!!document.querySelector("[data-brief-refresh]")','Daily Intelligence Briefing on Today');
+ await until('briefing.data && !briefing.loading','private briefing initial data',110);
+ const briefStatus=await evaluate('(async()=>{const d=await api("briefing");return {version:d.version,limit:d.limits.sources,items:d.items.length,hasSource:!!document.querySelector("[data-brief-refresh]"),text:document.body.innerText.includes("What deserves your attention?")}})()');
+ assert.equal(briefStatus.version,'0.5.8');
+ assert.equal(briefStatus.limit,100);
+ assert.ok(briefStatus.hasSource&&briefStatus.text,'Briefing Today UI is missing');
+ await evaluate('document.querySelector("[data-brief-filter=review]").click();true');
+ assert.equal(await evaluate('briefing.filter'), 'review');
+ await evaluate('document.querySelector("[data-brief-filter=all]").click();true');
+ assert.equal(await evaluate('briefing.filter'),'all');
+
  let sourceId=await evaluate('(async()=>{const r=await api("sources");const sources=r.sources||[];return (sources.find(x=>String(x.title||"").includes("Release validation '+commit.slice(0,12)+'"))||sources.find(x=>String(x.title||"").startsWith("Release validation ")))?.id||null})()');
  if(!sourceId){
   const seed='Browser-only synthetic learning fixture. An evidence claim needs verifiable text; a plausible explanation should be tested against alternative explanations. '.repeat(4);

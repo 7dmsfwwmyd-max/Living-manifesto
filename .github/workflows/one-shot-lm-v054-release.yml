@@ -1,0 +1,57 @@
+# One-time release trigger, approved in chat after full staging validation.
+# Merges no application changes. Runs the existing production promotion script
+# with EXACTLY the tested artifact and existing production safety/rollback gates.
+# Remove this file immediately after checking the promotion outcome.
+name: One-time Living Manifesto v0.5.4 production release
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/one-shot-lm-v054-release.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: living-manifesto-production
+  cancel-in-progress: false
+jobs:
+  promote:
+    if: ${{ github.ref == 'refs/heads/main' && github.event.head_commit.message == 'release: one-shot approved Living Manifesto v0.5.4' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      STAGING_RUN: '42434445270'
+      RELEASE_SHA: '0acdf0f940a8dcca2a0c999efb2dc77a7d882d07'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify successful staging run and immutable release SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$RELEASE_SHA" = '0acdf0f940a8dcca2a0c999efb2dc77a7d882d07'
+          test "$STAGING_RUN" = '42434445270'
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STAGING_RUN" > /tmp/stage-run.json
+          node --input-type=module -e "import fs from 'node:fs';import assert from 'node:assert/strict';const r=JSON.parse(fs.readFileSync('/tmp/stage-run.json'));assert.equal(r.conclusion,'success');assert.equal(r.head_sha,process.env.RELEASE_SHA);assert.equal(r.path,'.github/workflows/staging-release.yml');"
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ env.STAGING_RUN }}
+          name: staging-validated-${{ env.RELEASE_SHA }}
+          path: release
+      - name: Promote exact tested bytes; verify original DB/secrets, data and rollback
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ZERO_COST_CONFIRMED: workers-free-no-payment-method
+          WRANGLER_SEND_METRICS: 'false'
+        run: node scripts/promote-release.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-verification-${{ github.run_id }}
+          path: |
+            production-rollback.json
+            production-validation.json
+          retention-days: 30

@@ -26,7 +26,19 @@ try{
  const subdomain=await api('/workers/subdomain');
  const base='https://living-manifesto-staging.'+subdomain.subdomain+'.workers.dev';
  const env={...process.env,APP_PASSWORD:secrets.APP_PASSWORD,APP_URL:base,STAGING_URL:base,EXPECTED_SHA:process.env.GITHUB_SHA,TEST_X_URL:'https://x.com/l1vsun/status/2116519560631205914',TEST_PDF_URL:'https://arxiv.org/pdf/1706.03762'};
- let ready=false;for(let attempt=0;attempt<30;attempt++){try{const r=await fetch(base+'/api/health',{signal:AbortSignal.timeout(10000)});if(r.ok&&(await r.json()).commit===process.env.GITHUB_SHA){ready=true;break}}catch{}await new Promise(r=>setTimeout(r,2000))}assert.ok(ready,'Staging did not serve the expected release within readiness window');
+ let ready=false,lastHealth='no response';for(let attempt=0;attempt<30;attempt++){
+ try{
+  const url=base+'/api/health?release='+encodeURIComponent(process.env.GITHUB_SHA)+'&attempt='+attempt;
+  const r=await fetch(url,{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(10000)});
+  if(r.ok){
+   const info=await r.json();
+   lastHealth='HTTP '+r.status+' version '+String(info.version||'missing')+' commit '+String(info.commit||'missing').slice(0,14);
+   if(info.commit===process.env.GITHUB_SHA){ready=true;break}
+  }else lastHealth='HTTP '+r.status;
+ }catch(error){lastHealth=String(error?.message||'health request failed').slice(0,100)}
+ if(attempt<29)await new Promise(r=>setTimeout(r,2000));
+}
+assert.ok(ready,'Staging did not serve expected release. Last public health: '+lastHealth+'; expected '+process.env.GITHUB_SHA.slice(0,14));
  execFileSync(process.execPath,['scripts/healthcheck.mjs'],{stdio:'inherit',env});
  // Check browser UI first. Reuse a synthetic staging source when present to
  // catch UI regressions before spending any additional free-tier AI allowance.

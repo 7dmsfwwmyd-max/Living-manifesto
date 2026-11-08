@@ -63,7 +63,7 @@ try{
  const nav=await evaluate('(()=>{const n=[...document.querySelectorAll("[data-nav]")].find(x=>/library/i.test(x.textContent));if(n){n.click();return true}return false})()');
  assert.equal(nav,true,'Library navigation link is unavailable');
  await until('!!document.querySelector("[data-source]")','library source cards');
- const opened=await evaluate('(()=>{const n=document.querySelector("[data-source='+sourceId+']");if(n){n.click();return true}return false})()');
+ const opened=await evaluate('(()=>{const n=[...document.querySelectorAll("[data-source]")].find(x=>x.dataset.source==='+JSON.stringify(sourceId)+');if(n){n.click();return true}return false})()');
  assert.equal(opened,true,'Staging source was not rendered as a clickable library card');
  await until('!!document.querySelector("[data-learn-tab=understand]")','article detail navigation');
  assert.equal(await evaluate('(()=>{document.querySelector("[data-learn-tab=understand]").click();return true})()'),true);

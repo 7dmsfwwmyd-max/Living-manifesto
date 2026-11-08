@@ -75,11 +75,11 @@ try{
  await until('!!document.getElementById("lm-studio-review")','Learning Studio in Understand');
 
  assert.equal(await evaluate('(()=>{const n=document.querySelector("[data-studio-reveal]");n?.click();return !!document.body.innerText.includes("Verbatim saved-text excerpt")})()'),true,'Reference reveal did not work');
- const answer='The article argues that evidence should be checked before reaching a conclusion, and alternative explanations should be considered.';
+ const answer='The article argues that evidence should be checked before reaching a conclusion, and alternative explanations should be considered. Tested on '+commit.slice(0,12);
  const submit='(()=>{const i=document.getElementById("lm-studio-answer");i.value='+JSON.stringify(answer)+';document.getElementById("lm-studio-confidence").value="low";document.getElementById("lm-studio-review").requestSubmit();return true})()';
  await evaluate(submit);
- await until('studioLoad().reviews['+JSON.stringify(sourceId)+']?.length===1','saved recall review');
- const reviewed=await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+'][0]');
+ await until('studioLoad().reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+')','saved recall review');
+ const reviewed=await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+'].find(x=>x.answer==='+JSON.stringify(answer)+')');
  assert.equal(reviewed.confidence,'low');
  assert.ok(Date.parse(reviewed.next_review)>Date.now(),'Review schedule not set');
  assert.equal(await evaluate('(()=>{document.getElementById("lm-studio-path-name").value="Research foundations";document.getElementById("lm-studio-path").requestSubmit();return studioLoad().paths.some(x=>x.name==="Research foundations")})()'),true,'Reading path was not saved');
@@ -90,22 +90,22 @@ try{
  const preview=await evaluate('studioOverview()');
  assert.ok(preview.includes('Research foundations')&&preview.includes('Knowledge connections'),'Explore learning overview incomplete');
  // The imported JSON is retained locally; it does not touch production D1.
- assert.equal(await evaluate('(()=>{const old=localStorage.getItem("lm-learning-studio-v1");localStorage.removeItem("lm-learning-studio-v1");studioImport(old);return studioLoad().reviews['+JSON.stringify(sourceId)+']?.length===1})()'),true,'JSON backup restore failed');
+ assert.equal(await evaluate('(()=>{const old=localStorage.getItem("lm-learning-studio-v1");localStorage.removeItem("lm-learning-studio-v1");studioImport(old);return studioLoad().reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+')})()'),true,'JSON backup restore failed');
 
  // Cloud D1 must preserve study records across a second browser storage context.
  await evaluate('studioSyncNow()');
  // The page may already be sending a debounced write. Wait for a completed
  // revision rather than reading D1 before the in-flight write has committed.
- await until('(async()=>{const server=await api("studio-state");return !!server.state.reviews['+JSON.stringify(sourceId)+']?.length&&server.state.paths.length>0&&server.state.links.length>0})()','D1 cloud sync including all study data',100);
- const synced=await evaluate('(async()=>{const server=await api("studio-state");const graph=await api("knowledge-graph");return {revision:server.revision,hasReview:!!server.state.reviews['+JSON.stringify(sourceId)+'],paths:server.state.paths.length,links:server.state.links.length,graphSources:graph.sources.length,graphManual:graph.manual_links.length,localStatus:learningCloud.status,localError:learningCloud.error}})()');
+ await until('(async()=>{const server=await api("studio-state");return server.state.reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+')&&server.state.paths.length>0&&server.state.links.length>0})()','D1 cloud sync including all study data',100);
+ const synced=await evaluate('(async()=>{const server=await api("studio-state");const graph=await api("knowledge-graph");return {revision:server.revision,hasReview:server.state.reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+'),paths:server.state.paths.length,links:server.state.links.length,graphSources:graph.sources.length,graphManual:graph.manual_links.length,localStatus:learningCloud.status,localError:learningCloud.error}})()');
  assert.ok(synced.revision>=1&&synced.hasReview&&synced.paths>0&&synced.links>0,'Study records were not persisted to private D1: '+JSON.stringify(synced));
  assert.ok(synced.graphSources>0&&synced.graphManual>0,'Knowledge graph did not include saved sources and user links');
  // Emulate another device without the previous localStorage snapshot; the
  // authoritative state must restore it after a fresh authenticated API fetch.
  assert.equal(await evaluate('localStorage.removeItem("lm-learning-studio-v1");true'),true);
  await evaluate('studioSyncNow()');
- await until('studioLoad().reviews['+JSON.stringify(sourceId)+']?.length===1','fresh-device D1 restoration',80);
- assert.equal(await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+']?.length===1'),true,'Cloud state not restored in a fresh device context');
+ await until('studioLoad().reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+')','fresh-device D1 restoration',80);
+ assert.equal(await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+')'),true,'Cloud state not restored in a fresh device context');
  const exploreNav=await evaluate('(()=>{const n=document.querySelector("[data-nav=Explore]");if(!n)return false;n.click();return true})()');
  assert.equal(exploreNav,true,'Explore navigation was not available');
  await until('document.body.innerText.includes("Your knowledge graph")&&!!document.querySelector("[data-studio-cloud-sync]")','rendered knowledge graph viewer');
@@ -136,7 +136,7 @@ try{
  assert.ok(evergreenCheck.revision>=2&&evergreenCheck.refs===1&&evergreenCheck.quote===sourceText&&evergreenCheck.download===200&&evergreenCheck.md&&evergreenCheck.history>=1,'Evergreen source provenance, revision history or export failed');
  await command('Page.reload',{ignoreCache:true});
  await until('document.readyState==="complete"&&typeof studioLoad==="function"','reloaded application');
- assert.equal(await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+']?.length===1'),true,'Recall was lost across browser reload');
+ assert.equal(await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+')'),true,'Recall was lost across browser reload');
  console.log('PASS authenticated Chromium: login, recall and reviews, learning paths, manual links, D1 cloud sync, fresh-device restore, provenance graph, backup and reload persistence. No additional AI requests; evergreen notes, verified quotations and exports passed.');
 }finally{
  try{ws?.close()}catch{}

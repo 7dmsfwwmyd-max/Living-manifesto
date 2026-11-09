@@ -51,7 +51,7 @@ const deep=[
  'Always label source limitations: if the text is truncated or missing pages/tables, do not extrapolate. Never fabricate exact quotations or evidence. Return complete valid JSON only, without Markdown fences.'
 ].join(' ');
 worker=worker.replace(dossierSystem,'const system='+JSON.stringify(deep)+';');
-worker=replace(worker,"version:'0.5.8'","version:'0.5.9'",'health version');
+worker=replace(worker,"if(path==='/api/health'&&req.method==='GET')return json({ok:true,version:'0.5.8'","if(path==='/api/health'&&req.method==='GET')return json({ok:true,version:'0.5.9'",'health version');
 app=replace(app,'start();',(await readFile('features/summary-quality-app.js','utf8'))+'\nstart();','frontend argument reconstruction');
 app=app.replaceAll('v0.5.8','v0.5.9');
 await writeFile('dist/_worker.js',worker);

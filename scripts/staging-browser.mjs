@@ -83,6 +83,10 @@ try{
  const opened=await evaluate('(()=>{const n=[...document.querySelectorAll("[data-source]")].find(x=>x.dataset.source==='+JSON.stringify(sourceId)+');if(n){n.click();return true}return false})()');
  assert.equal(opened,true,'Staging source was not rendered as a clickable library card');
  await until('!!document.querySelector("[data-learn-tab=understand]")','article detail navigation');
+ // Summary depth is available for already-saved articles without invoking AI.
+ const storedSummaryCheck=await evaluate('(()=>{const source=state.detail?.source,ideas=state.detail?.ideas||[];const markup=summaryQualityMarkup({source:source||{summary:"Stored analysis",body:"A grounded passage from the source",retrieval:"supplied"},ideas:ideas.length?ideas:[{statement:"Grounded summary",mechanism:"Check assumptions",evidence:"Saved interpretation",counterargument:"Alternative reading",excerpt:"A grounded passage from the source"}]});return {hasPanel:markup.includes("Detailed argument and evidence"),hasMechanism:markup.includes("How the argument works"),hasCaveat:markup.includes("not independent verification"),domRendered:!!document.querySelector("[aria-label=\\"Detailed source summary\\"]")}})()');
+ assert.ok(storedSummaryCheck.hasPanel&&storedSummaryCheck.hasMechanism&&storedSummaryCheck.hasCaveat,'Saved-source detailed argument reconstruction is absent');
+
  assert.equal(await evaluate('(()=>{document.querySelector("[data-learn-tab=understand]").click();return true})()'),true);
  await until('!!document.getElementById("lm-studio-review")','Learning Studio in Understand');
  await until('!!document.querySelector("[data-evidence-record]")','Evidence ledger in saved source');

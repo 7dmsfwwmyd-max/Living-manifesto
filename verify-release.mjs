@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 const worker=readFileSync('dist/_worker.js','utf8');
 const app=readFileSync('dist/app.js','utf8');
 const checks=[
- ['health version and exact revision',worker.includes("if(path==='/api/health'&&req.method==='GET')return json({ok:true,version:'0.5.8',commit:")],
+ ['health version and exact revision',worker.includes("if(path==='/api/health'&&req.method==='GET')return json({ok:true,version:'0.5.9',commit:")],
  ['authenticated route',worker.includes("researchDossier(req,env,researchMatch[1])")],
  ['research endpoint',worker.includes('async function researchDossier(')],
  ['AI binding',worker.includes('env.CONVERTER.run(')],
@@ -39,6 +39,12 @@ const checks=[
  ['no model-inference briefing ranking',worker.includes('async function brRead(env)')],
  ['intellectual briefing Today interface',app.includes('function briefingMarkup()')],
  ['briefing snooze and restore',app.includes('data-brief-action=')],
+ ['article-specific detailed summaries',app.includes('function summaryQualityMarkup(d)')],
+ ['same-pass richer source prompt',worker.includes('step-by-step CAUSAL OR LOGICAL ARGUMENT')],
+ ['same-budget long article sampling',worker.includes('function summaryInputText(original)')],
+ ['deeper user-requested dossier prompt',worker.includes('two genuinely substantive intellectual connections')],
+ ['unchanged 2400 output token cap',worker.includes('max_tokens:2400')],
+ ['unchanged 3400 Deep Dive output token cap',worker.includes('max_tokens:3400')],
  ['existing article detail',app.includes('function detail()')]
 ];
 for(const [name,ok] of checks)console.log((ok?'PASS':'FAIL')+' '+name);

@@ -349,3 +349,70 @@ test('Health readiness: exact built Git SHA is embedded in PUBLIC health, not pr
  assert.equal(result.version,'0.5.8');
  assert.equal(Object.hasOwn(result,'commit'),false,'Source app commit must not be accidentally injected into briefing data');
 });
+
+test('Deeper summaries: same model invocation, bounded head-and-tail source context and honest omissions',async()=>{
+ const s=await setup();
+ let runs=0,request;
+ const original=body;
+ const long='LEAD UNIQUE research hypothesis: evidence quality matters. '.repeat(150)+
+   'MIDDLE OMITTED: extensive arguments and counterexamples. '.repeat(180)+
+   'ENDING UNIQUE conclusion: specific missing observations would change the answer. '.repeat(50);
+ s.env.CONVERTER.run=async (model,input)=>{
+  runs++;request=input;
+  const raw=JSON.parse(input.messages[1].content);
+  assert.ok(raw.body.includes('LEAD UNIQUE'));
+  assert.ok(raw.body.includes('ENDING UNIQUE'));
+  assert.ok(!raw.body.includes('MIDDLE OMITTED'),'A large middle section should not be disguised as model-read text');
+  assert.equal(raw.source_text_sampling,'beginning_and_ending_only');
+  assert.equal(raw.source_text_characters,long.length);
+  assert.ok(raw.body.length<=10000,'No increase in source character budget');
+  assert.ok(input.messages[0].content.includes('central')||input.messages[0].content.includes('CENTRAL THESIS'));
+  assert.equal(input.max_tokens,2400,'The same automatic output-token cap must be retained');
+  return {response:JSON.stringify({summary:'The central thesis is that evidence should be revisited. This source is partially sampled.',question:'Which evidence would change your mind?',disciplines:['Research'],ideas:[{statement:'Evidence strength matters for conclusions',mechanism:'Weigh the claim against independent observations',evidence:'The source asserts quality matters, but does not independently prove it',counterargument:'Alternative evidence may overturn the account',excerpt:long.slice(0,90),tags:['Evidence']}],proposed_principles:[],connections:[]})};
+ };
+ const id=(await (await s.req('capture','POST',{title:'Large source analysis',body:long})).json()).id;
+ await Promise.all(s.pending);
+ assert.equal(runs,1,'Automatic capture must use one model call only');
+ const saved=(await (await s.req('sources/'+id)).json());
+ assert.equal(saved.source.status,'ready');
+ assert.ok(saved.source.body.includes('MIDDLE OMITTED'),'Full saved original must remain intact');
+ assert.equal(saved.ideas.length,1);
+ assert.ok(saved.ideas[0].excerpt.length>=12);
+});
+test('Deeper summaries: existing source detail is reconstructed from saved ideas without AI',async()=>{
+ const vmContext=vm.createContext({document:{getElementById:()=>({innerHTML:''}),addEventListener(){},querySelector:()=>null},navigator:{},location:{protocol:'http:'},fetch:async()=>new Response('',{status:401}),setTimeout:(fn,ms)=>setTimeout(fn,ms).unref(),clearTimeout,console,URL,localStorage:{getItem:()=>null}});
+ vm.runInContext(readFileSync('dist/app.js','utf8'),vmContext);
+ await new Promise(r=>setTimeout(r,10));
+ const html=vm.runInContext('summaryQualityMarkup({source:{summary:"Brief existing summary",body:"Grounded passage from the saved article",retrieval:"supplied"},ideas:[{statement:"A source-based claim",mechanism:"A mechanism explained in the underlying analysis",evidence:"The author asserts evidence without independent confirmation",counterargument:"A competing explanation remains plausible",excerpt:"Grounded passage from the saved article"}]})',vmContext);
+ assert.ok(html.includes('Detailed argument and evidence'));
+ assert.ok(html.includes('How the argument works'));
+ assert.ok(html.includes('Strongest recorded limitation'));
+ assert.ok(html.includes('Exact words found in saved text'));
+ assert.ok(html.includes('not independent verification'));
+ assert.ok(html.includes('earlier, shorter analysis'),'Do not claim the old summary has been regenerated');
+});
+test('Deeper summaries: source excerpts and AI prose are XSS-escaped, non-matching quotations flagged',async()=>{
+ const ctx=vm.createContext({document:{getElementById:()=>({innerHTML:''}),addEventListener(){},querySelector:()=>null},navigator:{},location:{protocol:'http:'},fetch:async()=>new Response('',{status:401}),setTimeout:(fn,ms)=>setTimeout(fn,ms).unref(),clearTimeout,console,URL,localStorage:{getItem:()=>null}});
+ vm.runInContext(readFileSync('dist/app.js','utf8'),ctx);
+ const evil='<img src=x onerror=alert(1)>';
+ const data={source:{summary:evil,body:'This is original source text',retrieval:'x_post_embed_only'},ideas:[{statement:evil,mechanism:evil,evidence:evil,counterargument:evil,excerpt:evil}],links:[]};
+ const html=vm.runInContext('summaryQualityMarkup('+JSON.stringify(data)+')',ctx);
+ assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'));
+ assert.ok(!html.includes('<img src=x'));
+ assert.ok(html.includes('could not be matched'));
+ assert.ok(html.includes('longer threads or linked material may be missing'));
+});
+test('Deep Dive: richer prompt uses existing optional user-initiated inference and same token ceiling',async()=>{
+ const s=await setup(),id=(await (await s.req('capture','POST',{body,title:'Dossier depth fixture'})).json()).id;await Promise.all(s.pending);
+ let calls=0;
+ s.env.CONVERTER.run=async(model,input)=>{
+  calls++;assert.equal(input.max_tokens,3400);assert.ok(input.messages[0].content.includes('150-210 words'));assert.ok(input.messages[0].content.includes('falsifying observations'));assert.equal(input.response_format.type,'json_object');
+  return {response:JSON.stringify(dossier)};
+ };
+ assert.equal((await s.req('sources/'+id+'/learning-dossier')).status,200);
+ assert.equal(calls,0,'Reading cached state cannot invoke the model');
+ const generated=await s.req('sources/'+id+'/learning-dossier','POST',{});
+ assert.equal(generated.status,200);assert.equal(calls,1);
+ const again=await s.req('sources/'+id+'/learning-dossier','POST',{});
+ assert.equal(again.status,200);assert.equal(calls,1,'Cached dossier must not regenerate');
+});

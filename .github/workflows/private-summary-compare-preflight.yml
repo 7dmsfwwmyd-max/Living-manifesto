@@ -1,0 +1,54 @@
+# One-time, read-only private inventory. Never fetches/prints personal article text.
+name: Private summary comparison preflight
+on:
+  push:
+    branches: [feature/private-summary-comparison]
+    paths: ['.github/workflows/private-summary-compare-preflight.yml']
+permissions:
+  contents: read
+concurrency:
+  group: living-manifesto-summary-preflight
+  cancel-in-progress: false
+jobs:
+  preflight:
+    if: "${{ github.event.head_commit.message == 'audit: one-shot private summary-comparison billing and library preflight' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read billing gates and count eligible summaries only
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID;
+          const token=process.env.CLOUDFLARE_API_TOKEN;
+          assert.match(account||'',/^[a-f0-9]{32}$/);
+          assert.ok(token?.length>15);
+          const base='https://api.cloudflare.com/client/v4/accounts/'+account;
+          async function get(path,method='GET',body){
+            try{
+              const response=await fetch(base+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(20000)});
+              const data=await response.json();
+              return {ok:response.ok&&data.success===true,status:response.status,result:data.result};
+            }catch{return {ok:false,status:0,result:null}}
+          }
+          const [subscriptions,payment,workers,library]=await Promise.all([
+            get('/subscriptions'),
+            get('/payment-methods'),
+            get('/workers/account-settings'),
+            get('/d1/database/39259550-5d35-4d51-aaee-f203d33af1c9/query','POST',{sql:"SELECT count(*) AS ready_summaries, sum(CASE WHEN length(body)>=300 THEN 1 ELSE 0 END) AS source_text_eligible, sum(CASE WHEN length(summary)<450 THEN 1 ELSE 0 END) AS short_summaries, min(length(summary)) AS shortest_summary_chars, max(length(summary)) AS longest_summary_chars FROM sources WHERE status='ready' AND length(summary)>0"})
+          ]);
+          const active=(Array.isArray(subscriptions.result)?subscriptions.result:[]).filter(s=>!['Cancelled','Failed','Expired'].includes(s.state));
+          const payments=Array.isArray(payment.result)?payment.result:[];
+          const noPaidSubscriptions=subscriptions.ok&&active.every(s=>s.rate_plan?.id==='free'||(s.price===0&&s.rate_plan?.scope!=='workers'));
+          const verifiedFreeOnly=subscriptions.ok&&payment.ok&&payments.length===0&&noPaidSubscriptions;
+          const inv=library.ok&&Array.isArray(library.result)&&library.result[0]?.results?.[0]?library.result[0].results[0]:null;
+          console.log(JSON.stringify({billing_subscription_readable:subscriptions.ok,payment_method_list_readable:payment.ok,payment_methods_present:payment.ok?payments.length:null,active_non_free_subscriptions:subscriptions.ok?active.filter(s=>s.rate_plan?.id!=='free'&&!(s.price===0&&s.rate_plan?.scope!=='workers')).length:null,workers_settings_readable:workers.ok,workers_usage_model:workers.ok?String(workers.result?.default_usage_model||'unknown'):null,strict_zero_charge_gate:verifiedFreeOnly?'PASS':'NOT_VERIFIED',library_readable:!!inv,eligible_summary_inventory:inv?{ready_summaries:inv.ready_summaries,source_text_eligible:inv.source_text_eligible,short_summaries:inv.short_summaries,shortest_summary_chars:inv.shortest_summary_chars,longest_summary_chars:inv.longest_summary_chars}:null}));
+          if(!verifiedFreeOnly)process.exitCode=2;
+          NODE

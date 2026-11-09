@@ -343,7 +343,7 @@ test('Daily briefing UI: escapes untrusted titles and renders independent source
 test('Health readiness: exact built Git SHA is embedded in PUBLIC health, not private briefing payload',async()=>{
  const s=await setup();
  const health=await (await s.req('health')).json();
- assert.equal(health.version,'0.5.8');
+ assert.equal(health.version,'0.5.9');
  assert.match(health.commit,/^[0-9a-f]{40}$/);
  const result=await (await s.req('briefing')).json();
  assert.equal(result.version,'0.5.8');
@@ -364,7 +364,7 @@ test('Deeper summaries: same model invocation, bounded head-and-tail source cont
   assert.ok(raw.body.includes('ENDING UNIQUE'));
   assert.ok(!raw.body.includes('MIDDLE OMITTED'),'A large middle section should not be disguised as model-read text');
   assert.equal(raw.source_text_sampling,'beginning_and_ending_only');
-  assert.equal(raw.source_text_characters,long.length);
+  assert.equal(raw.source_text_characters,long.trim().length,'Capture normalises surrounding whitespace before storing source text');
   assert.ok(raw.body.length<=10000,'No increase in source character budget');
   assert.ok(input.messages[0].content.includes('central')||input.messages[0].content.includes('CENTRAL THESIS'));
   assert.equal(input.max_tokens,2400,'The same automatic output-token cap must be retained');
@@ -374,7 +374,7 @@ test('Deeper summaries: same model invocation, bounded head-and-tail source cont
  await Promise.all(s.pending);
  assert.equal(runs,1,'Automatic capture must use one model call only');
  const saved=(await (await s.req('sources/'+id)).json());
- assert.equal(saved.source.status,'ready');
+ assert.equal(saved.source.status,'ready',saved.source.error||'Automatic analysis failed without an error string');
  assert.ok(saved.source.body.includes('MIDDLE OMITTED'),'Full saved original must remain intact');
  assert.equal(saved.ideas.length,1);
  assert.ok(saved.ideas[0].excerpt.length>=12);

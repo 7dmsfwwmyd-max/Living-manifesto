@@ -19,7 +19,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   promote:
-    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'release: promote validated Living Manifesto v0.5.10'
+    if: >-
+      github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'release: promote validated Living Manifesto v0.5.10'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:

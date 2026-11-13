@@ -1,0 +1,10 @@
+import {readFile,writeFile} from 'node:fs/promises';
+let worker=await readFile('dist/_worker.js','utf8'),app=await readFile('dist/app.js','utf8');
+const anchor="if(!r.ok)throw Error(data.error||'Request failed');return data;";
+if(!app.includes(anchor))throw Error('API error anchor missing');
+app=app.replace(anchor,"if(!r.ok){const error=Error(data.error||'Request failed');error.details=data;throw error}return data;");
+const health="version:'0.5.9'";
+if(!worker.includes(health))throw Error('Health version anchor missing');
+worker=worker.replace(health,"version:'0.5.10'");
+app=app.replaceAll('v0.5.9','v0.5.10');
+await writeFile('dist/_worker.js',worker);await writeFile('dist/app.js',app);

@@ -7,7 +7,7 @@ const worker=(await import('../dist/_worker.js')).default;
 const body='Compound knowledge grows through careful reading, testing assumptions and revisiting evidence. '.repeat(8).trim();
 const dossier=Object.fromEntries(['overview','first_principles','argument','context','connections','critique','questions'].map(k=>[k,'A substantive explanation of '+k]));dossier.reading=[{title:'Thinking, Fast and Slow',author:'Daniel Kahneman',reason:'Judgment',level:'Introductory'}];
 function database(){const db=new DatabaseSync(':memory:');return {db,prepare(sql){let args=[];const s={bind(...a){args=a;return s},async first(){return db.prepare(sql).get(...args)||null},async all(){return {results:db.prepare(sql).all(...args)}},async run(){const result=db.prepare(sql).run(...args);return {success:true,meta:{changes:Number(result.changes)}}}};return s},async batch(stmts){db.exec('BEGIN');try{const r=await Promise.all(stmts.map(s=>s.run()));db.exec('COMMIT');return r}catch(e){db.exec('ROLLBACK');throw e}}}}
-async function setup(){const DB=database();let calls=0;const env={DB,APP_PASSWORD:'test-only',SESSION_SECRET:'test-only-session-secret',CONVERTER:{run:async(model,input)=>{assert.equal(model,'@cf/meta/llama-3.3-70b-instruct-fp8-fast');assert.equal(input.response_format.type,'json_object');calls++;return {response:JSON.stringify(input.messages[0].content.includes('personal research analyst')?{summary:'Evidence improves learning.',question:'How do we check assumptions?',disciplines:['Learning'],ideas:[{statement:'Revisit evidence',mechanism:'Check assumptions',evidence:'Source assertion',counterargument:'Checks may be incomplete',excerpt:body.slice(0,90),tags:[]}],proposed_principles:[{text:'Check assumptions',rationale:'Reduce error'}],connections:[]}:dossier)}},toMarkdown:async()=>({data:body})},ASSETS:{fetch:async()=>new Response('asset')}};let cookie='';const pending=[];async function req(path,method='GET',data,extra={}){return worker.fetch(new Request('https://manifesto.example/api/'+path,{method,headers:{cookie,'X-Manifesto-Request':'1',...extra},body:data===undefined?undefined:JSON.stringify(data)}),env,{waitUntil:p=>pending.push(p)})}const login=await req('login','POST',{password:'test-only'});assert.equal(login.status,200);cookie=login.headers.get('set-cookie').split(';')[0];return {env,req,pending,calls:()=>calls}};
+async function setup(){const DB=database();let calls=0;const env={DB,APP_PASSWORD:'test-only',SESSION_SECRET:'test-only-session-secret',CONVERTER:{run:async(model,input)=>{assert.equal(model,'@cf/meta/llama-3.3-70b-instruct-fp8-fast');assert.equal(input.response_format.type,input.max_tokens===3400?'json_schema':'json_object');calls++;return {response:JSON.stringify(input.messages[0].content.includes('personal research analyst')?{summary:'Evidence improves learning.',question:'How do we check assumptions?',disciplines:['Learning'],ideas:[{statement:'Revisit evidence',mechanism:'Check assumptions',evidence:'Source assertion',counterargument:'Checks may be incomplete',excerpt:body.slice(0,90),tags:[]}],proposed_principles:[{text:'Check assumptions',rationale:'Reduce error'}],connections:[]}:dossier)}},toMarkdown:async()=>({data:body})},ASSETS:{fetch:async()=>new Response('asset')}};let cookie='';const pending=[];async function req(path,method='GET',data,extra={}){return worker.fetch(new Request('https://manifesto.example/api/'+path,{method,headers:{cookie,'X-Manifesto-Request':'1',...extra},body:data===undefined?undefined:JSON.stringify(data)}),env,{waitUntil:p=>pending.push(p)})}const login=await req('login','POST',{password:'test-only'});assert.equal(login.status,200);cookie=login.headers.get('set-cookie').split(';')[0];return {env,req,pending,calls:()=>calls}};
 test('generated Worker: auth, capture, persistence, cached dossier without AI, export',async()=>{const s=await setup();assert.equal((await s.req('sources','GET',undefined,{cookie:''})).status,401);assert.equal((await s.req('capture','POST',{body},{Origin:'https://evil.example'})).status,403);const c=await s.req('capture','POST',{body,title:'Fixture'});assert.equal(c.status,201);const {id}=await c.json();assert.equal((await (await s.req('sources/'+id)).json()).source.body,body);await Promise.all(s.pending);const path='sources/'+id+'/learning-dossier';assert.equal((await (await s.req(path)).json()).dossier,null);const gen=await s.req(path,'POST',{});assert.equal(gen.status,200);assert.equal((await gen.json()).dossier.overview,dossier.overview);await s.req(path,'POST',{});assert.equal(s.calls(),2);delete s.env.CONVERTER;assert.equal((await s.req(path)).status,200);assert.equal((await s.req(path,'POST',{})).status,200);const backup=await (await s.req('export')).json();assert.equal(backup.learning_dossiers.length,1);assert.equal(backup.sources[0].body,body);s.env.DB.db.close()});
 test('generated Worker: reject incomplete AI without persisting it',async()=>{const s=await setup();s.env.CONVERTER.run=async()=>({response:'{"overview":"Only one section"}'});const {id}=await (await s.req('capture','POST',{body})).json();assert.equal((await s.req('sources/'+id+'/learning-dossier','POST',{})).status,502);assert.equal((await (await s.req('sources/'+id+'/learning-dossier')).json()).dossier,null)});
 test('generated Worker: X and PDF link extraction with controlled upstream fixtures',async()=>{const s=await setup();const old=globalThis.fetch;try{globalThis.fetch=async url=>String(url).includes('fxtwitter')?Response.json({tweet:{text:body,author:{name:'Fixture'}}}):new Response('%PDF-1.4 fixture',{headers:{'content-type':'text/plain'}});for(const url of ['https://x.com/fixture/status/12345678','https://example.com/fixture.pdf']){const {id}=await (await s.req('capture','POST',{url})).json();await Promise.all(s.pending);const saved=await (await s.req('sources/'+id)).json();assert.ok(saved.source.body.includes('Compound knowledge'));assert.notEqual(saved.source.retrieval,'pending')}}finally{globalThis.fetch=old}});
@@ -343,7 +343,7 @@ test('Daily briefing UI: escapes untrusted titles and renders independent source
 test('Health readiness: exact built Git SHA is embedded in PUBLIC health, not private briefing payload',async()=>{
  const s=await setup();
  const health=await (await s.req('health')).json();
- assert.equal(health.version,'0.5.9');
+ assert.equal(health.version,'0.5.10');
  assert.match(health.commit,/^[0-9a-f]{40}$/);
  const result=await (await s.req('briefing')).json();
  assert.equal(result.version,'0.5.8');
@@ -406,7 +406,7 @@ test('Deep Dive: richer prompt uses existing optional user-initiated inference a
  const s=await setup(),id=(await (await s.req('capture','POST',{body,title:'Dossier depth fixture'})).json()).id;await Promise.all(s.pending);
  let calls=0;
  s.env.CONVERTER.run=async(model,input)=>{
-  calls++;assert.equal(input.max_tokens,3400);assert.ok(input.messages[0].content.includes('150-210 words'));assert.ok(input.messages[0].content.includes('falsifying observations'));assert.equal(input.response_format.type,'json_object');
+  calls++;assert.equal(input.max_tokens,3400);assert.ok(input.messages[0].content.includes('150-210 words'));assert.ok(input.messages[0].content.includes('falsifying observations'));assert.equal(input.response_format.type,input.max_tokens===3400?'json_schema':'json_object');
   return {response:JSON.stringify(dossier)};
  };
  assert.equal((await s.req('sources/'+id+'/learning-dossier')).status,200);
@@ -415,4 +415,68 @@ test('Deep Dive: richer prompt uses existing optional user-initiated inference a
  assert.equal(generated.status,200);assert.equal(calls,1);
  const again=await s.req('sources/'+id+'/learning-dossier','POST',{});
  assert.equal(again.status,200);assert.equal(calls,1,'Cached dossier must not regenerate');
+});
+
+test('topics: failures consume allowance, return coverage and block upstream on sixth attempt',async()=>{
+ const s=await setup(),old=globalThis.fetch;let calls=0;
+ try{
+  globalThis.fetch=async()=>{calls++;return new Response('unavailable',{status:503})};
+  for(let n=0;n<5;n++){
+   const r=await s.req('topics','POST',{topic:'Unavailable '+n});assert.equal(r.status,503);
+   const d=await r.json();assert.equal(d.resources.length,0);assert.equal(d.coverage.length,6);
+  }
+  const before=calls,r=await s.req('topics','POST',{topic:'Another attempt'});
+  assert.equal(r.status,429);assert.equal(calls,before);assert.ok(Number(r.headers.get('Retry-After'))>0);
+  assert.equal((await r.json()).retry_after<=3600,true);
+  assert.equal((await (await s.req('topics')).json()).searches.length,0);
+  s.env.DB.db.prepare('UPDATE topic_search_attempts SET created_at=?').run(new Date(Date.now()-3600001).toISOString());
+  assert.equal((await s.req('topics','POST',{topic:'After expiry'})).status,503);
+  assert.equal(s.env.DB.db.prepare('SELECT count(*) n FROM topic_search_attempts').get().n,1);
+ }finally{globalThis.fetch=old;s.env.DB.db.close()}
+});
+
+test('topics: concurrent reservations cap outbound searches and cached reads remain available',async()=>{
+ const s=await setup(),old=globalThis.fetch;let calls=0;delete s.env.CONVERTER;
+ try{
+  globalThis.fetch=async url=>{calls++;return String(url).includes('api.crossref.org')?Response.json({message:{items:[{title:['Evidence'],URL:'https://doi.org/10.1234/evidence'}]}}):new Response('limited',{status:503})};
+  const first=await (await s.req('topics','POST',{topic:'Saved topic'})).json();
+  assert.equal(first.resources[0].discovery_provider,'Crossref');assert.match(first.resources[0].access_status,/unverified/);
+  const responses=await Promise.all(Array.from({length:8},(_,n)=>s.req('topics','POST',{topic:'Concurrent '+n})));
+  assert.equal(responses.filter(r=>r.status===200).length,4);assert.equal(responses.filter(r=>r.status===429).length,4);
+  const before=calls,cached=await (await s.req('topics','POST',{topic:'Saved topic'})).json();assert.equal(cached.cached,true);assert.equal(cached.id,first.id);assert.equal(calls,before);
+  assert.equal((await s.req('topics','POST',{topic:'Saved topic',refresh:true})).status,429);
+  assert.equal((await (await s.req('topics')).json()).searches.length,5);
+ }finally{globalThis.fetch=old;s.env.DB.db.close()}
+});
+
+test('topics UI: failed new searches clear stale results, show coverage and preserve history',async()=>{
+ const app={innerHTML:''},listeners={};let rejectRequest;
+ const document={getElementById:()=>app,addEventListener(type,fn){(listeners[type]??=[]).push(fn)},querySelector:()=>null};
+ const context=vm.createContext({document,navigator:{},location:{protocol:'http:'},fetch:async()=>new Response('',{status:401}),setTimeout:(fn,ms)=>setTimeout(fn,ms).unref(),clearTimeout,console,URL,localStorage:{getItem:()=>null},FormData:class{get(){return 'New topic'}}});
+ vm.runInContext(readFileSync('dist/app.js','utf8'),context);await new Promise(r=>setTimeout(r,10));
+ context.pendingSearch=new Promise((resolve,reject)=>{rejectRequest=reject});
+ vm.runInContext(`topics.active={id:'old',topic:'Old topic',resources:[],coverage:[]};topics.items=[topics.active];render=()=>{};api=()=>pendingSearch`,context);
+ const submit=listeners.submit.find(fn=>fn.toString().includes('topic-form'));
+ const pending=submit({target:{id:'topic-form'},preventDefault(){}});
+ assert.equal(vm.runInContext('topics.active',context),null);
+ assert.equal(vm.runInContext('topics.loading',context),true);
+ const error=new Error('Search failed');error.details={coverage:[{kind:'X',status:'Search unavailable <script>'}],retry_after:90};rejectRequest(error);await pending;
+ const html=vm.runInContext('topicMarkup()',context);assert.match(html,/Search failed/);assert.match(html,/Search unavailable &lt;script&gt;/);assert.match(html,/about 2 minutes/);assert.doesNotMatch(html,/<h2>Old topic/);
+ assert.equal(vm.runInContext('topics.items.length',context),1);assert.equal(vm.runInContext('topics.loading',context),false);
+});
+
+test('Deep Dive: explicit provider schema, unchanged single-call budget, strict malformed-output rejection',async()=>{
+ const s=await setup();const {id}=await (await s.req('capture','POST',{body})).json();await Promise.all(s.pending);
+ let calls=0;const path='sources/'+id+'/learning-dossier';
+ s.env.CONVERTER.run=async(model,input)=>{
+  calls++;assert.equal(input.max_tokens,3400);assert.equal(input.response_format.type,'json_schema');
+  const schema=input.response_format.json_schema;assert.equal(schema.required.length,8);assert.equal(schema.properties.questions.type,'string');assert.equal(schema.properties.reading.items.type,'object');
+  return {response:JSON.stringify({...dossier,reading:[null]})};
+ };
+ let r=await s.req(path,'POST',{});assert.equal(r.status,502);assert.equal((await r.json()).error_code,'invalid_schema');assert.equal(calls,1);assert.equal((await (await s.req(path)).json()).dossier,null);
+ s.env.CONVERTER.run=async()=>({response:'{"overview":"truncated'});
+ r=await s.req(path,'POST',{});assert.equal(r.status,502);assert.equal((await r.json()).error_code,'invalid_json');assert.equal((await (await s.req(path)).json()).dossier,null);
+ s.env.CONVERTER.run=async()=>({response:dossier});assert.equal((await s.req(path,'POST',{})).status,200);
+ delete s.env.CONVERTER;assert.equal((await (await s.req(path,'POST',{})).json()).cached,true);
+ assert.equal((await (await s.req('sources/'+id)).json()).source.body,body);
 });

@@ -12,6 +12,7 @@ execFileSync(process.execPath,['evidence-ledger-patch.mjs'],{stdio:'inherit'});
 execFileSync(process.execPath,['briefing-patch.mjs'],{stdio:'inherit'});
 execFileSync(process.execPath,['summary-quality-patch.mjs'],{stdio:'inherit'});
 execFileSync(process.execPath,['discovery-reliability-patch.mjs'],{stdio:'inherit'});
+execFileSync(process.execPath,['deep-dive-contract-patch.mjs'],{stdio:'inherit'});
 const commit=process.env.GITHUB_SHA||execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
 let worker=await readFile('dist/_worker.js','utf8');
 const healthAnchor="if(path==='/api/health'&&req.method==='GET')return json({ok:true,version:'0.5.10'";

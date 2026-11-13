@@ -2,7 +2,7 @@
 // No packages, paid services, production writes or extra AI requests.
 import assert from 'node:assert/strict';
 import {spawn,execFileSync} from 'node:child_process';
-import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const base=process.env.STAGING_URL,password=process.env.APP_PASSWORD,commit=process.env.EXPECTED_SHA;
@@ -154,9 +154,46 @@ try{
  await until('evergreen.active?.source_refs?.length===1','authentic cited source saved');
  const evergreenCheck=await evaluate('(async()=>{const x=await api("evergreen/'+conceptId+'");const r=await fetch("/api/evergreen/export?format=markdown");const md=await r.text();const h=await api("evergreen/'+conceptId+'/history");return {revision:x.note.revision,refs:x.note.source_refs.length,quote:x.note.source_refs[0].quote,download:r.status,md:md.includes("Evidence foundations"),history:h.history.length}})()');
  assert.ok(evergreenCheck.revision>=2&&evergreenCheck.refs===1&&evergreenCheck.quote===sourceText&&evergreenCheck.download===200&&evergreenCheck.md&&evergreenCheck.history>=1,'Evergreen source provenance, revision history or export failed');
+ // Topic workspaces: create through the UI, retain a draft across rerenders,
+ // attach an existing synthetic source and read earlier authored views.
+ await until('knowledge.loaded && !knowledge.loading && !knowledge.busy','Topic index ready');
+ const topicName='Staging evidence '+commit.slice(0,12);
+ const existingTopic=await evaluate('knowledge.items.find(x=>x.title==='+JSON.stringify(topicName)+')?.id||null');
+ if(existingTopic){await evaluate('ktOpen('+JSON.stringify(existingTopic)+')')}
+ else{
+  await evaluate('document.querySelector("[data-kt-new]").click();true');
+  await until('!!document.getElementById("kt-editor")','Topic editor');
+  await evaluate('(()=>{document.getElementById("kt-title").value='+JSON.stringify(topicName)+';document.getElementById("kt-keywords").value="evidence, assumptions";document.getElementById("kt-current_view").value="Independent evidence should determine the strength of my confidence.";document.getElementById("kt-confidence").value="moderate";document.getElementById("kt-would_change").value="A well-designed replication that contradicts the proposed mechanism.";document.getElementById("kt-open_questions").value="How independent are these observations?";document.getElementById("kt-change_reason").value="Starting an explicit record of how evidence changes my judgment.";document.getElementById("kt-current_view").dispatchEvent(new Event("input",{bubbles:true}));render();return true})()');
+  assert.equal(await evaluate('document.getElementById("kt-current_view").value'),'Independent evidence should determine the strength of my confidence.','Unsaved topic draft was lost on rerender');
+  await evaluate('document.getElementById("kt-editor").requestSubmit();true');
+  await until('!!knowledge.active?.id && knowledge.active.title==='+JSON.stringify(topicName)+' && !knowledge.busy','Topic saved in D1');
+ }
+ const topicId=await evaluate('knowledge.active.id');
+ if(!await evaluate('knowledge.active.source_refs.some(x=>x.source_id==='+JSON.stringify(sourceId)+')')){
+  await evaluate('(()=>{const f=document.getElementById("kt-attach");f.querySelector("[name=source_id]").value='+JSON.stringify(sourceId)+';f.querySelector("[name=relation]").value="challenges";f.querySelector("[name=rationale]").value="This source tests the assumptions behind my view.";f.requestSubmit();return true})()');
+  await until('knowledge.active.source_refs.some(x=>x.source_id==='+JSON.stringify(sourceId)+') && !knowledge.busy','Source attached to topic');
+ }
+ const previousView=await evaluate('knowledge.active.current_view');
+ await evaluate('document.querySelector("[data-kt-edit]").click();true');
+ await until('!!document.getElementById("kt-editor")','Thinking review editor');
+ const revisedView='I now distinguish independent evidence from repetitions of the same assumption.';
+ await evaluate('(()=>{document.getElementById("kt-current_view").value='+JSON.stringify(revisedView)+';document.getElementById("kt-confidence").value="low";document.getElementById("kt-change_reason").value="The attached source changed my interpretation of independence.";document.getElementById("kt-editor").requestSubmit();return true})()');
+ await until('knowledge.active.current_view==='+JSON.stringify(revisedView)+' && !knowledge.busy','Revised view saved');
+ await evaluate('document.querySelector("[data-kt-history]").click();true');
+ await until('Array.isArray(knowledge.history) && !knowledge.busy','Previous views loaded');
+ assert.ok(await evaluate('knowledge.history.some(h=>h.topic.current_view==='+JSON.stringify(previousView)+')'),'Prior view missing from history');
+ const topicCheck=await evaluate('(async()=>{const p=await api("knowledge-topics/'+topicId+'");const b=await api("export");return {view:p.topic.current_view,confidence:p.topic.confidence,source:p.sources.some(s=>s.source_id==='+JSON.stringify(sourceId)+'&&!s.quality.complete_verified),exported:b.knowledge_topics.some(t=>t.id==='+JSON.stringify(topicId)+'),history:b.knowledge_topic_history.some(t=>t.topic_id==='+JSON.stringify(topicId)+')}})()');
+ assert.equal(topicCheck.view,revisedView);assert.equal(topicCheck.confidence,'low');assert.ok(topicCheck.source&&topicCheck.exported&&topicCheck.history,'Topic coverage or backup missing');
+ await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+ await evaluate('knowledge.history=null;render();document.querySelector("[data-kt-new]").closest("article").scrollIntoView();true');
+ const topicScreenshot=await command('Page.captureScreenshot',{format:'png'});
+ await writeFile('staging-topics.png',Buffer.from(topicScreenshot.data,'base64'));
+ console.log('PASS real topic UI: draft retention, source classification, revised confidence, readable history and private export; no AI calls.');
  await command('Page.reload',{ignoreCache:true});
  await until('document.readyState==="complete"&&typeof studioLoad==="function"','reloaded application');
  assert.equal(await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+')'),true,'Recall was lost across browser reload');
+ await evaluate('ktOpen('+JSON.stringify(topicId)+')');
+ assert.equal(await evaluate('knowledge.active.current_view'),revisedView,'Topic view lost after reload');
  console.log('PASS authenticated Chromium: login, recall and reviews, learning paths, manual links, D1 cloud sync, fresh-device restore, provenance graph, backup and reload persistence. No additional AI requests; evergreen notes, verified quotations and exports passed.');
 }finally{
  try{ws?.close()}catch{}

@@ -343,7 +343,7 @@ test('Daily briefing UI: escapes untrusted titles and renders independent source
 test('Health readiness: exact built Git SHA is embedded in PUBLIC health, not private briefing payload',async()=>{
  const s=await setup();
  const health=await (await s.req('health')).json();
- assert.equal(health.version,'0.5.9');
+ assert.equal(health.version,'0.5.10');
  assert.match(health.commit,/^[0-9a-f]{40}$/);
  const result=await (await s.req('briefing')).json();
  assert.equal(result.version,'0.5.8');
@@ -415,4 +415,52 @@ test('Deep Dive: richer prompt uses existing optional user-initiated inference a
  assert.equal(generated.status,200);assert.equal(calls,1);
  const again=await s.req('sources/'+id+'/learning-dossier','POST',{});
  assert.equal(again.status,200);assert.equal(calls,1,'Cached dossier must not regenerate');
+});
+
+test('topics: failures consume allowance, return coverage and block upstream on sixth attempt',async()=>{
+ const s=await setup(),old=globalThis.fetch;let calls=0;
+ try{
+  globalThis.fetch=async()=>{calls++;return new Response('unavailable',{status:503})};
+  for(let n=0;n<5;n++){
+   const r=await s.req('topics','POST',{topic:'Unavailable '+n});assert.equal(r.status,503);
+   const d=await r.json();assert.equal(d.resources.length,0);assert.equal(d.coverage.length,6);
+  }
+  const before=calls,r=await s.req('topics','POST',{topic:'Another attempt'});
+  assert.equal(r.status,429);assert.equal(calls,before);assert.ok(Number(r.headers.get('Retry-After'))>0);
+  assert.equal((await r.json()).retry_after<=3600,true);
+  assert.equal((await (await s.req('topics')).json()).searches.length,0);
+  s.env.DB.db.prepare('UPDATE topic_search_attempts SET created_at=?').run(new Date(Date.now()-3600001).toISOString());
+  assert.equal((await s.req('topics','POST',{topic:'After expiry'})).status,503);
+  assert.equal(s.env.DB.db.prepare('SELECT count(*) n FROM topic_search_attempts').get().n,1);
+ }finally{globalThis.fetch=old;s.env.DB.db.close()}
+});
+
+test('topics: concurrent reservations cap outbound searches and cached reads remain available',async()=>{
+ const s=await setup(),old=globalThis.fetch;let calls=0;delete s.env.CONVERTER;
+ try{
+  globalThis.fetch=async url=>{calls++;return String(url).includes('api.crossref.org')?Response.json({message:{items:[{title:['Evidence'],URL:'https://doi.org/10.1234/evidence'}]}}):new Response('limited',{status:503})};
+  const first=await (await s.req('topics','POST',{topic:'Saved topic'})).json();
+  assert.equal(first.resources[0].discovery_provider,'Crossref');assert.match(first.resources[0].access_status,/unverified/);
+  const responses=await Promise.all(Array.from({length:8},(_,n)=>s.req('topics','POST',{topic:'Concurrent '+n})));
+  assert.equal(responses.filter(r=>r.status===200).length,4);assert.equal(responses.filter(r=>r.status===429).length,4);
+  const before=calls,cached=await (await s.req('topics','POST',{topic:'Saved topic'})).json();assert.equal(cached.cached,true);assert.equal(cached.id,first.id);assert.equal(calls,before);
+  assert.equal((await s.req('topics','POST',{topic:'Saved topic',refresh:true})).status,429);
+  assert.equal((await (await s.req('topics')).json()).searches.length,5);
+ }finally{globalThis.fetch=old;s.env.DB.db.close()}
+});
+
+test('topics UI: failed new searches clear stale results, show coverage and preserve history',async()=>{
+ const app={innerHTML:''},listeners={};let rejectRequest;
+ const document={getElementById:()=>app,addEventListener(type,fn){(listeners[type]??=[]).push(fn)},querySelector:()=>null};
+ const context=vm.createContext({document,navigator:{},location:{protocol:'http:'},fetch:async()=>new Response('',{status:401}),setTimeout:(fn,ms)=>setTimeout(fn,ms).unref(),clearTimeout,console,URL,localStorage:{getItem:()=>null},FormData:class{get(){return 'New topic'}}});
+ vm.runInContext(readFileSync('dist/app.js','utf8'),context);await new Promise(r=>setTimeout(r,10));
+ context.pendingSearch=new Promise((resolve,reject)=>{rejectRequest=reject});
+ vm.runInContext(`topics.active={id:'old',topic:'Old topic',resources:[],coverage:[]};topics.items=[topics.active];render=()=>{};api=()=>pendingSearch`,context);
+ const submit=listeners.submit.find(fn=>fn.toString().includes('topic-form'));
+ const pending=submit({target:{id:'topic-form'},preventDefault(){}});
+ assert.equal(vm.runInContext('topics.active',context),null);
+ assert.equal(vm.runInContext('topics.loading',context),true);
+ const error=new Error('Search failed');error.details={coverage:[{kind:'X',status:'Search unavailable <script>'}],retry_after:90};rejectRequest(error);await pending;
+ const html=vm.runInContext('topicMarkup()',context);assert.match(html,/Search failed/);assert.match(html,/Search unavailable &lt;script&gt;/);assert.match(html,/about 2 minutes/);assert.doesNotMatch(html,/<h2>Old topic/);
+ assert.equal(vm.runInContext('topics.items.length',context),1);assert.equal(vm.runInContext('topics.loading',context),false);
 });

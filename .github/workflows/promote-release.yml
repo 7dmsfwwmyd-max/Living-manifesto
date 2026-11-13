@@ -1,8 +1,5 @@
 name: Promote validated artifact
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/promote-release.yml']
   workflow_dispatch:
     inputs:
       staging_run_id:
@@ -19,13 +16,11 @@ concurrency:
   cancel-in-progress: false
 jobs:
   promote:
-    if: >-
-      github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'release: promote validated Living Manifesto v0.5.11'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      STAGING_RUN: ${{ inputs.staging_run_id || '43515031401' }}
-      RELEASE_SHA: ${{ inputs.release_sha || '621ece4bdfdb9fd3cf907eb380369276fdfb0def' }}
+      STAGING_RUN: ${{ inputs.staging_run_id }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

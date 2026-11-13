@@ -35,5 +35,6 @@ jobs:
           path: |
             dist/
             staging-validation.json
+            staging-topics.png
           include-hidden-files: true
           retention-days: 30

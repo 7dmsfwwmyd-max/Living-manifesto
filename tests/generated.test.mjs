@@ -343,7 +343,7 @@ test('Daily briefing UI: escapes untrusted titles and renders independent source
 test('Health readiness: exact built Git SHA is embedded in PUBLIC health, not private briefing payload',async()=>{
  const s=await setup();
  const health=await (await s.req('health')).json();
- assert.equal(health.version,'0.5.10');
+ assert.equal(health.version,'0.5.11');
  assert.match(health.commit,/^[0-9a-f]{40}$/);
  const result=await (await s.req('briefing')).json();
  assert.equal(result.version,'0.5.8');
@@ -479,4 +479,62 @@ test('Deep Dive: explicit provider schema, unchanged single-call budget, strict 
  s.env.CONVERTER.run=async()=>({response:dossier});assert.equal((await s.req(path,'POST',{})).status,200);
  delete s.env.CONVERTER;assert.equal((await (await s.req(path,'POST',{})).json()).cached,true);
  assert.equal((await (await s.req('sources/'+id)).json()).source.body,body);
+});
+
+const ktFixture=()=>({title:'Evidence and conviction',keywords:['evidence','assumptions'],current_view:'I should revise confidence when independent evidence changes.',confidence:'moderate',would_change:'A robust replication that contradicts the mechanism.',open_questions:'How independent are the observations?',change_reason:'Starting a record of how evidence changes my view.',source_refs:[]});
+test('topic workspaces: private authored views, source quality, suggestions, concepts and zero inference',async()=>{
+ const s=await setup();
+ const {id}=await (await s.req('capture','POST',{body,title:'Evidence from repeated experiments'})).json();await Promise.all(s.pending);
+ const {id:other}=await (await s.req('capture','POST',{body:body+' Additional detail.',title:'Alternative evidence'})).json();await Promise.all(s.pending);
+ const before=s.calls(),value={...ktFixture(),source_refs:[{source_id:id,relation:'challenges',rationale:'Tests my assumption.'}]};
+ assert.equal((await s.req('knowledge-topics','GET',undefined,{cookie:''})).status,401);
+ assert.equal((await s.req('knowledge-topics','POST',value,{Origin:'https://evil.example'})).status,403);
+ await s.req('evergreen','POST',{title:'Evidence concept',thesis:'Evidence has to be relevant and independent.',content:'A shared source is a reference, not proof of agreement.',source_refs:[{source_id:id,relation:'context',quote:'',comment:''}],related:[]});
+ const created=await s.req('knowledge-topics','POST',value);assert.equal(created.status,201);const {topic}=await created.json();
+ const page=await (await s.req('knowledge-topics/'+topic.id)).json();
+ assert.equal(page.sources[0].relation,'challenges');assert.equal(page.sources[0].quality.label,'Supplied text');assert.equal(page.sources[0].quality.complete_verified,false);assert.ok(page.sources[0].ideas.length);assert.equal(page.concepts.length,1);assert.ok(page.suggestions.some(x=>x.source_id===other));assert.ok(!page.suggestions.some(x=>x.source_id===id));
+ assert.equal(s.calls(),before,'Topic reads and edits must not call AI');
+ assert.equal((await (await s.req('knowledge-topics')).json()).topics[0].id,topic.id);
+ const backup=await (await s.req('export')).json();assert.equal(backup.knowledge_topics.length,1);assert.equal(backup.knowledge_topic_history.length,0);
+ assert.equal((await (await s.req('sources/'+id)).json()).source.body,body);
+});
+test('topic workspaces: compare-and-swap edits preserve earlier beliefs and reject stale changes',async()=>{
+ const s=await setup();const {topic}=await (await s.req('knowledge-topics','POST',ktFixture())).json();const path='knowledge-topics/'+topic.id;
+ const next={...ktFixture(),current_view:'Replication is necessary but measurement quality also matters.',confidence:'low',change_reason:'A contrary measurement changed my confidence.'};
+ assert.equal((await s.req(path,'PUT',{revision:1,topic:next})).status,200);
+ assert.equal((await s.req(path,'PUT',{revision:1,topic:{...next,current_view:'Stale overwrite'}})).status,409);
+ const page=await (await s.req(path)).json();assert.equal(page.topic.revision,2);assert.equal(page.topic.current_view,next.current_view);
+ const history=(await (await s.req(path+'/history')).json()).history;assert.equal(history.length,1);assert.equal(history[0].topic.current_view,ktFixture().current_view);assert.equal(history[0].topic.change_reason,ktFixture().change_reason);
+ const backup=await (await s.req('export')).json();assert.equal(backup.knowledge_topic_history.length,1);
+ assert.equal((await s.req(path,'PUT',{revision:2,topic:{...next,change_reason:''}})).status,422);
+ assert.equal((await s.req(path,'DELETE')).status,405);
+});
+test('topic workspaces: validate saved references and bounded inputs; detach preserves originals',async()=>{
+ const s=await setup(),base=ktFixture();
+ for(const invalid of [{...base,source_refs:[{source_id:'deadbeef-dead-beef',relation:'supports'}]},{...base,confidence:'certain'},{...base,keywords:Array(13).fill('evidence')},{...base,change_reason:'short'}])assert.equal((await s.req('knowledge-topics','POST',invalid)).status,422);
+ const {id}=await (await s.req('capture','POST',{body})).json();await Promise.all(s.pending);
+ const ref={source_id:id,relation:'supports',rationale:'My interpretation.'};
+ assert.equal((await s.req('knowledge-topics','POST',{...base,source_refs:[ref,ref]})).status,422);
+ const {topic}=await (await s.req('knowledge-topics','POST',{...base,source_refs:[ref]})).json();
+ assert.equal((await s.req('knowledge-topics/'+topic.id,'PUT',{revision:1,topic:{...base,source_refs:[],change_reason:'Removed from this topic only.'}})).status,200);
+ assert.equal((await (await s.req('sources/'+id)).json()).source.body,body);
+ const h=await (await s.req('knowledge-topics/'+topic.id+'/history')).json();assert.equal(h.history[0].topic.source_refs[0].source_id,id);
+});
+test('topic source coverage: metadata, excerpts and long text never imply completeness',async()=>{
+ const code=readFileSync('features/source-quality.js','utf8'),c=vm.createContext({});vm.runInContext(code,c);
+ for(const [source,label] of [[{url:'https://youtube.com/watch?v=test',body_length:0},'Video link only'],[{body_length:20},'Very limited text'],[{body_length:1000,retrieval:'pdf_extracted'},'PDF extraction'],[{body_length:1000,retrieval:'x_post_embed_only'},'X text / excerpt'],[{body_length:48000,retrieval:'html'},'Extracted text']]){
+  c.source=source;const quality=vm.runInContext('ktQuality(source)',c);assert.equal(quality.label,label);assert.equal(quality.complete_verified,false);assert.equal(quality.analysis_context_limited,(source.body_length||0)>10000);
+ }
+});
+test('topic UI: escapes authored content, labels inference, and retains drafts through rerenders',async()=>{
+ const app={innerHTML:''};const document={getElementById:()=>app,addEventListener(){},querySelector:()=>null};
+ const c=vm.createContext({document,navigator:{},location:{protocol:'http:'},fetch:async()=>new Response('',{status:401}),setTimeout:(fn,ms)=>setTimeout(fn,ms).unref(),clearTimeout,console,URL,localStorage:{getItem:()=>null}});
+ vm.runInContext(readFileSync('dist/app.js','utf8'),c);await new Promise(r=>setTimeout(r,10));
+ c.topic={...ktFixture(),id:'abc',revision:1,title:'<img src=x onerror=alert(1)>',updated_at:'2026-11-13'};
+ const html=vm.runInContext(`knowledge.loaded=true;knowledge.active=topic;knowledge.page={disclosure:'Saved AI interpretations',sources:[],suggestions:[],concepts:[],next_actions:[],limits:{suggestion_pool:400}};knowledgeMarkup()`,c);
+ assert.ok(html.includes('&lt;img'));assert.ok(!html.includes('<img'));assert.match(html,/Saved AI interpretations/);
+ vm.runInContext(`knowledge.draft={...topic,current_view:'Unsaved <script>draft</script>',change_reason:'A new line of thought'};knowledge.dirty=true`,c);
+ assert.match(vm.runInContext('knowledgeMarkup()',c),/Unsaved &lt;script&gt;draft/);
+ assert.match(vm.runInContext('knowledgeMarkup()',c),/A new line of thought/);
+ const q=vm.runInContext(`ktQualityMarkup({body:'',url:'https://youtube.com/watch?v=abc'})`,c);assert.match(q,/Video link only/);assert.match(q,/No transcript/);
 });

@@ -1,0 +1,16 @@
+import {readFile,writeFile} from 'node:fs/promises';
+let w=await readFile('dist/_worker.js','utf8'),a=await readFile('dist/app.js','utf8');
+const replace=(s,n,v)=>{if(!s.includes(n))throw Error('Topic workspace anchor missing: '+n);return s.replace(n,()=>v)};
+const quality=await readFile('features/source-quality.js','utf8');
+w=replace(w,'async function handle(req,env,ctx)',quality+(await readFile('features/knowledge-topics-worker.js','utf8'))+'\nasync function handle(req,env,ctx)');
+w=replace(w," if(path==='/api/session'"," if(path==='/api/knowledge-topics'||path.startsWith('/api/knowledge-topics/'))return ktRoute(req,env,path);\n if(path==='/api/session'");
+w=replace(w,'const out={briefing_preferences:',"const hasKnowledge=await env.DB.prepare(\"SELECT name FROM sqlite_master WHERE type='table' AND name='knowledge_topics'\").first();const out={knowledge_topics:hasKnowledge?await rows(env.DB.prepare('SELECT * FROM knowledge_topics')):[],knowledge_topic_history:hasKnowledge?await rows(env.DB.prepare('SELECT * FROM knowledge_topic_history')):[],briefing_preferences:");
+w=replace(w,"version:'0.5.10'","version:'0.5.11'");
+a=replace(a,'function explore(){return evidenceOverviewMarkup()', 'function explore(){return knowledgeMarkup()+evidenceOverviewMarkup()');
+a=replace(a,'start();',quality+(await readFile('features/knowledge-topics-app.js','utf8'))+`\nconst ktOriginalSourceRow=sourceRow;
+sourceRow=function(s){const q=ktQuality({...s,body_length:s.body_length??s.body?.length??0});return ktOriginalSourceRow(s).replace('<h3>',tag(q.label)+'<h3>')};
+const ktOriginalDetail=detail;
+detail=function(){return (state.detail?.source?'<article class="card" style="margin:16px 0"><h2>Source coverage</h2>'+ktQualityMarkup(state.detail.source)+'</article>':'')+ktOriginalDetail()};
+start();`);
+a=a.replaceAll('v0.5.10','v0.5.11');
+await writeFile('dist/_worker.js',w);await writeFile('dist/app.js',a);

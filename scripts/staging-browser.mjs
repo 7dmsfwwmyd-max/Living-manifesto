@@ -91,7 +91,7 @@ try{
  await until('!!document.querySelector("[data-learn-tab=understand]")','article detail navigation');
  await until('!!document.querySelector("[data-source-reader]")','stored source text reader');
  assert.equal(await evaluate('(()=>{const reader=document.querySelector("[data-source-reader]");reader.querySelector("summary").click();return reader.open&&reader.textContent.includes(state.detail.source.body)})()'),true,'Stored original text is not readable');
- assert.equal(await evaluate('!!document.querySelector("[aria-label=\"Knowledge and practice\"]")'),true,'Learning outcomes panel is absent');
+ assert.equal(await evaluate(`!!document.querySelector('[aria-label="Knowledge and practice"]')`),true,'Learning outcomes panel is absent');
  // Summary depth is available for already-saved articles without invoking AI.
  const storedSummaryCheck=await evaluate('(()=>{const source=state.detail?.source,ideas=state.detail?.ideas||[];const markup=summaryQualityMarkup({source:source||{summary:"Stored analysis",body:"A grounded passage from the source",retrieval:"supplied"},ideas:ideas.length?ideas:[{statement:"Grounded summary",mechanism:"Check assumptions",evidence:"Saved interpretation",counterargument:"Alternative reading",excerpt:"A grounded passage from the source"}]});return {hasPanel:markup.includes("Detailed argument and evidence"),hasMechanism:markup.includes("How the argument works"),hasCaveat:markup.includes("not independent verification"),domRendered:!!document.querySelector("[aria-label=\\"Detailed source summary\\"]")}})()');
  assert.ok(storedSummaryCheck.hasPanel&&storedSummaryCheck.hasMechanism&&storedSummaryCheck.hasCaveat,'Saved-source detailed argument reconstruction is absent');

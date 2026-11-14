@@ -77,14 +77,14 @@ async function elAuditRoute(req,env,sourceId){
 }
 async function elOverview(req,env){
  if(req.method!=='GET')return failure('Method not allowed',405);
- const sources=await rows(env.DB.prepare('SELECT id,title,status,retrieval,error,attempts,updated_at,length(body) AS body_length FROM sources ORDER BY created_at DESC LIMIT 60'));
+ const sources=await rows(env.DB.prepare('SELECT id,title,url,status,retrieval,error,attempts,updated_at,length(body) AS body_length FROM sources ORDER BY created_at DESC LIMIT 60'));
  const exists=await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='evidence_audits'").first();
  const audits=exists?await rows(env.DB.prepare('SELECT source_id,verified_at,content FROM evidence_audits ORDER BY verified_at DESC LIMIT 60')):[];
  const saved=new Map(audits.map(x=>[x.source_id,x]));
  const entries=sources.map(s=>{
   const audit=saved.get(s.id);let count=0,anchored=0,unanchored=0;
   if(audit)try{const d=JSON.parse(audit.content);count=d.counts.claims;anchored=d.counts.anchored;unanchored=d.counts.missing_or_unmatched}catch{}
-  return {id:s.id,title:elShort(s.title,180),status:s.status,
+  return {id:s.id,title:elShort(sourceLabel(s),180),status:s.status,
    retrieval:s.retrieval,processing_attempts:s.attempts||0,
    processing_issue:elShort(s.error,160),last_updated:s.updated_at,
    saved_text_characters:s.body_length||0,has_recorded_audit:!!audit,

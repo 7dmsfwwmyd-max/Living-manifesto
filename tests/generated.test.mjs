@@ -321,7 +321,7 @@ test('Daily briefing: incomplete sources and explicit user-authored connections 
  const state={version:1,reviews:{},paths:[],links:[{from:a,to:b,fromTitle:'First source',toTitle:'Other source',kind:'challenges',reason:'The second article challenges the mechanisms claimed in the first.'}]};
  s.env.DB.db.prepare("INSERT INTO studio_state(key,content,revision,updated_at) VALUES('owner',?,1,?)").run(JSON.stringify(state),new Date().toISOString());
  const result=await (await s.req('briefing')).json();
- assert.ok(result.items.some(x=>x.key==='processing:'+a&&x.explanation.includes(problem)));
+ assert.ok(result.attention.some(x=>x.key==='processing:'+a&&x.explanation.includes(problem)));
  assert.ok(result.items.some(x=>x.kind==='connection'&&x.why.includes('you wrote')&&x.why.includes('not AI-confirmed')));
  assert.ok(result.items.every(x=>!x.why.includes('published today')));
  assert.equal((await s.req('briefing','POST',{})).status,405);
@@ -333,7 +333,7 @@ test('Daily briefing UI: escapes untrusted titles and renders independent source
  await new Promise(r=>setTimeout(r,10));
  const evil='<img src=x onerror=alert(1)>',id='aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
  const report={version:'0.5.8',generated_at:new Date().toISOString(),counts:{due_reviews:1,processing:1,concepts_missing_sources:0},items:[{key:'processing:'+id,kind:'processing',title:evil,explanation:evil,why:evil,source_id:id,preference_revision:0,action_label:'Inspect processing'}],hidden:[]};
- const html=vm.runInContext('briefing.data='+JSON.stringify(report)+';briefingMarkup()',context);
+ const html=vm.runInContext('briefing.data='+JSON.stringify(report)+';briefing.filter="processing";briefingMarkup()',context);
  assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'));assert.ok(!html.includes('<img src=x'));
  assert.ok(html.includes('Snooze 1 day')&&html.includes('Dismiss'));
  assert.ok(html.includes('Capture dates are not publication dates'));
@@ -343,7 +343,7 @@ test('Daily briefing UI: escapes untrusted titles and renders independent source
 test('Health readiness: exact built Git SHA is embedded in PUBLIC health, not private briefing payload',async()=>{
  const s=await setup();
  const health=await (await s.req('health')).json();
- assert.equal(health.version,'0.5.11');
+ assert.equal(health.version,'0.5.12');
  assert.match(health.commit,/^[0-9a-f]{40}$/);
  const result=await (await s.req('briefing')).json();
  assert.equal(result.version,'0.5.8');
@@ -538,3 +538,33 @@ test('topic UI: escapes authored content, labels inference, and retains drafts t
  assert.match(vm.runInContext('knowledgeMarkup()',c),/A new line of thought/);
  const q=vm.runInContext(`ktQualityMarkup({body:'',url:'https://youtube.com/watch?v=abc'})`,c);assert.match(q,/Video link only/);assert.match(q,/No transcript/);
 });
+
+ test('Today repair: link-only captures cannot displace reading and keep recoverable labels',async()=>{
+ const s=await setup();const {id}=await (await s.req('capture','POST',{title:'Readable fixture',body})).json();await Promise.all(s.pending);
+ const before=s.calls();
+ for(let i=0;i<12;i++)s.env.DB.db.prepare("INSERT INTO sources(id,title,url,body,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)").run(crypto.randomUUID(),'','https://x.com/fixture/status/'+(12345000+i),'','awaiting_content',new Date().toISOString(),new Date().toISOString());
+ const data=await (await s.req('briefing')).json();
+ const overview=await (await s.req('evidence/overview')).json();assert.ok(overview.sources.filter(x=>x.status==='awaiting_content').every(x=>x.title.startsWith('X post · @fixture')));
+ assert.equal(data.attention.length,12);assert.ok(data.attention.every(x=>x.title.startsWith('X post · @fixture')&&!x.has_saved_text));
+ assert.ok(data.items.some(x=>x.source_id===id&&x.kind==='reading'));assert.ok(data.items.every(x=>x.kind!=='processing'));
+ assert.equal(s.calls(),before);assert.equal((await (await s.req('sources/'+id)).json()).source.body,body);
+ const key=data.attention[0].key;await s.req('briefing/action','POST',{item_key:key,action:'dismiss',expected_revision:0});
+ assert.equal((await (await s.req('briefing')).json()).attention.length,11);
+ await s.req('briefing/action','POST',{item_key:key,action:'restore',expected_revision:1});
+ assert.equal((await (await s.req('briefing')).json()).attention.length,12);
+ });
+ test('Today repair: supplied share title survives a media capture without text',async()=>{
+ const s=await setup();const r=await s.req('shortcut-intake','POST',{url:'https://www.youtube.com/watch?v=fixture1234',title:'Shared video title'});assert.equal(r.status,200);
+ const d=await r.json();await Promise.all(s.pending);const saved=(await (await s.req('sources/'+d.source_id)).json()).source;
+ assert.equal(saved.title,'Shared video title');assert.equal(saved.status,'awaiting_content');assert.equal(s.calls(),0);
+ });
+ test('Today repair UI: original text is escaped and missing text is explicit',async()=>{
+ const app={innerHTML:''},document={getElementById:()=>app,addEventListener(){},querySelector:()=>null};
+ const context=vm.createContext({document,navigator:{},location:{protocol:'http:'},fetch:async()=>new Response('',{status:401}),setTimeout:(fn,ms)=>setTimeout(fn,ms).unref(),clearTimeout,console,URL,localStorage:{getItem:()=>null}});
+ vm.runInContext(readFileSync('dist/app.js','utf8'),context);await new Promise(r=>setTimeout(r,10));
+ const html=vm.runInContext(`state.detail={source:{id:'test',body:'<script>unsafe</script> Saved original text',disciplines:'[]',status:'ready'},ideas:[],links:[]};integrated.bySource.test={__empty:true};detail()`,context);
+ assert.ok(html.includes('data-source-reader'));assert.ok(html.includes('&lt;script&gt;unsafe&lt;/script&gt;'));assert.ok(!html.includes('<script>unsafe'));
+ assert.ok(vm.runInContext(`state.detail.source.body='';detail()`,context).includes('No source text is stored'));
+ const report={items:[],attention:[{key:'processing:test',source_id:'test',title:'YouTube video · fixture',explanation:'No readable source text saved'}],counts:{processing:1},hidden:[]};
+ const today=vm.runInContext('briefing.data='+JSON.stringify(report)+';briefingMarkup()',context);assert.ok(today.includes('data-brief-attention'));assert.ok(!today.includes('data-brief-attention="1" open'));assert.ok(today.includes('YouTube video · fixture'));
+ });

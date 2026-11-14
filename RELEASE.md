@@ -206,3 +206,7 @@ Two additive private D1 tables retain topic snapshots and earlier revisions. Sav
 - [Production promotion 43515384376](https://github.com/7dmsfwwmyd-max/Living-manifesto/actions/runs/43515384376) passed exact artifact/asset hashes, original secret and D1 bindings, anonymous access denial and unchanged pre-existing stored-data fingerprints. Worker version `fd9cbd3a-7d4f-40bb-985d-73c47ab61fcc`. Public health independently confirmed v0.5.11 and the exact merge SHA. Rollback metadata remains in the workflow artifact; manual promotion trigger restored.
 - New user flow: Explore → New topic → record a view/questions → attach saved sources → Review my thinking → Read previous views. The standard JSON export includes topic state and history; automated import of these tables is not yet implemented.
 - No new AI calls in these features, paid providers, API keys or billing changes. Existing source/dossier data and adopted beliefs are preserved. Private production behaviour in the user's actual iPhone session remains unverified.
+
+## v0.5.12 — Today capture repair
+
+Separates incomplete captures from reading recommendations, derives missing display titles from saved URLs, preserves incoming share titles on retrieval failure, and adds an escaped expandable original-text reader. No stored records are rewritten or removed; unavailable upstream text is not reconstructed. Existing snooze/dismiss controls work in the Processing filter. Local validation: 44 generated Worker/frontend tests. Live staging and production evidence will be recorded after validation.

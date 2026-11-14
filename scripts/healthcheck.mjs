@@ -12,7 +12,7 @@ for(let attempt=0;attempt<12;attempt++){
   try{
     health=await (await get('/api/health'+stamp)).json();
     release=await (await get('/release.json'+stamp)).json();
-    if(health.version==='0.5.11'&&release.version===health.version&&health.commit===expected&&release.commit===expected){matched=true;break}
+    if(health.version==='0.5.12'&&release.version===health.version&&health.commit===expected&&release.commit===expected){matched=true;break}
   }catch(error){if(attempt===11)throw error}
   if(attempt<11)await new Promise(resolve=>setTimeout(resolve,2000));
 }

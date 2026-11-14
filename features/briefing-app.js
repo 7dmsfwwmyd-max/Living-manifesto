@@ -29,7 +29,8 @@ function briefingMarkup(){
  html+='<p class="small muted">'+Number(counts.due_reviews||0)+' due reviews · '+
   Number(counts.processing||0)+' incomplete sources · '+Number(counts.concepts_missing_sources||0)+
   ' uncited evergreen concepts · Generated '+esc(brShort(data.generated_at,16).replace('T',' '))+' UTC</p>';
- const all=data.items||[],view=all.filter(x=>briefing.filter==='all'||x.kind===briefing.filter);
+ const all=data.items||[],attention=data.attention||all.filter(x=>x.kind==='processing');
+ const view=briefing.filter==='processing'?attention:all.filter(x=>x.kind!=='processing'&&(briefing.filter==='all'||x.kind===briefing.filter));
  const list=briefing.showAll?view:view.slice(0,9);
  html+='<div class="actions" role="group" aria-label="Filter briefing">'+
   [{key:'all',name:'All'},{key:'review',name:'Reviews'},{key:'reading',name:'Reading'},
@@ -47,6 +48,11 @@ function briefingMarkup(){
    concept?'<button class="btn small" data-brief-concept="'+esc(concept)+'">Open concept</button>':'')+
    '<button class="btn small" data-brief-action="snooze_1d" data-brief-key="'+key+'" data-brief-revision="'+Number(item.preference_revision||0)+'" '+(briefing.changing[item.key]?'disabled':'')+'>Snooze 1 day</button>'+
    '<button class="btn small" data-brief-action="dismiss" data-brief-key="'+key+'" data-brief-revision="'+Number(item.preference_revision||0)+'" '+(briefing.changing[item.key]?'disabled':'')+'>Dismiss</button></div></article>';
+ }
+ if(briefing.filter!=='processing'&&attention.length){
+  html+='<details style="border-top:1px solid var(--border,#ddd);padding-top:16px" data-brief-attention="1"><summary>Captures needing attention ('+attention.length+')</summary><p class="small muted">These are saved links or unfinished analyses, not reading recommendations. Missing source text has not been reconstructed.</p>'+
+   attention.slice(0,5).map(item=>'<article style="padding:10px 0"><h3>'+esc(brShort(item.title,170))+'</h3><p>'+esc(item.explanation)+'</p><button class="btn small" data-source="'+esc(item.source_id)+'">'+esc(item.action_label||'Inspect capture')+'</button></article>').join('')+
+   '<button class="btn small" data-brief-filter="processing">Manage all incomplete captures</button></details>';
  }
  if(view.length>9)html+='<button class="btn small" data-brief-showall="1">'+(briefing.showAll?'Show fewer':'Show '+Math.min(view.length,24)+' items')+'</button>';
  if(data.hidden?.length){

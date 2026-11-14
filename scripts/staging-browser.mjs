@@ -71,6 +71,12 @@ try{
  await evaluate('document.querySelector("[data-brief-filter=all]").click();true');
  assert.equal(await evaluate('briefing.filter'),'all');
 
+ const incomplete=await evaluate('(async()=>{const r=await api("shortcut-intake",{method:"POST",body:JSON.stringify({url:"https://www.youtube.com/watch?v=lmfixture12"})});await brRefresh(true);return r.source_id})()');
+ assert.ok(incomplete,'Incomplete capture fixture was not saved');
+ assert.equal(await evaluate('briefing.data.items.some(x=>x.kind==="processing")'),false,'Incomplete capture entered reading agenda');
+ assert.equal(await evaluate('briefing.data.attention.some(x=>x.source_id==='+JSON.stringify(incomplete)+'&&x.title.includes("YouTube video")&&!x.has_saved_text)'),true,'Incomplete capture lacks an honest usable label');
+ await until('!!document.querySelector("[data-brief-attention]")','separate incomplete captures');
+ assert.equal(await evaluate('document.querySelector("[data-brief-attention]").open'),false,'Incomplete captures should start collapsed');
  let sourceId=await evaluate('(async()=>{const r=await api("sources");const sources=r.sources||[];return (sources.find(x=>String(x.title||"").includes("Release validation '+commit.slice(0,12)+'"))||sources.find(x=>String(x.title||"").startsWith("Release validation ")))?.id||null})()');
  if(!sourceId){
   const seed='Browser-only synthetic learning fixture. An evidence claim needs verifiable text; a plausible explanation should be tested against alternative explanations. '.repeat(4);
@@ -83,6 +89,8 @@ try{
  const opened=await evaluate('(()=>{const n=[...document.querySelectorAll("[data-source]")].find(x=>x.dataset.source==='+JSON.stringify(sourceId)+');if(n){n.click();return true}return false})()');
  assert.equal(opened,true,'Staging source was not rendered as a clickable library card');
  await until('!!document.querySelector("[data-learn-tab=understand]")','article detail navigation');
+ await until('!!document.querySelector("[data-source-reader]")','stored source text reader');
+ assert.equal(await evaluate('(()=>{const reader=document.querySelector("[data-source-reader]");reader.querySelector("summary").click();return reader.open&&reader.textContent.includes(state.detail.source.body)})()'),true,'Stored original text is not readable');
  // Summary depth is available for already-saved articles without invoking AI.
  const storedSummaryCheck=await evaluate('(()=>{const source=state.detail?.source,ideas=state.detail?.ideas||[];const markup=summaryQualityMarkup({source:source||{summary:"Stored analysis",body:"A grounded passage from the source",retrieval:"supplied"},ideas:ideas.length?ideas:[{statement:"Grounded summary",mechanism:"Check assumptions",evidence:"Saved interpretation",counterargument:"Alternative reading",excerpt:"A grounded passage from the source"}]});return {hasPanel:markup.includes("Detailed argument and evidence"),hasMechanism:markup.includes("How the argument works"),hasCaveat:markup.includes("not independent verification"),domRendered:!!document.querySelector("[aria-label=\\"Detailed source summary\\"]")}})()');
  assert.ok(storedSummaryCheck.hasPanel&&storedSummaryCheck.hasMechanism&&storedSummaryCheck.hasCaveat,'Saved-source detailed argument reconstruction is absent');

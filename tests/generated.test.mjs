@@ -544,6 +544,7 @@ test('topic UI: escapes authored content, labels inference, and retains drafts t
  const before=s.calls();
  for(let i=0;i<12;i++)s.env.DB.db.prepare("INSERT INTO sources(id,title,url,body,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)").run(crypto.randomUUID(),'','https://x.com/fixture/status/'+(12345000+i),'','awaiting_content',new Date().toISOString(),new Date().toISOString());
  const data=await (await s.req('briefing')).json();
+ const overview=await (await s.req('evidence/overview')).json();assert.ok(overview.sources.filter(x=>x.status==='awaiting_content').every(x=>x.title.startsWith('X post · @fixture')));
  assert.equal(data.attention.length,12);assert.ok(data.attention.every(x=>x.title.startsWith('X post · @fixture')&&!x.has_saved_text));
  assert.ok(data.items.some(x=>x.source_id===id&&x.kind==='reading'));assert.ok(data.items.every(x=>x.kind!=='processing'));
  assert.equal(s.calls(),before);assert.equal((await (await s.req('sources/'+id)).json()).source.body,body);

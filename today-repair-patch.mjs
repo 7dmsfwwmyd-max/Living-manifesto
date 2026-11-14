@@ -3,7 +3,7 @@ let w=await readFile('dist/_worker.js','utf8'),a=await readFile('dist/app.js','u
 const replace=(s,n,v)=>{if(!s.includes(n))throw Error('Today repair anchor missing: '+n);return s.replace(n,()=>v)};
 const labels=await readFile('features/source-label.js','utf8');w=labels+'\n'+w;
 // Keep the supplied share title even if extraction fails. An extracted title
-// still takes precedence when available; existing analysed records are untouched.
+// supplies a fallback when no title was shared; existing analysed records are untouched.
 w=replace(w,".bind(uid,url,url?'':fileName,info.kind", ".bind(uid,url,url?clean(p.title,240):fileName,info.kind");
 w=replace(w,"let body=supplied, title=url?'':fileName", "let body=supplied, title=url?clean(p.title,240):fileName");
 a=replace(a,"const ready=pick(x=>x.status==='ready'), pending=pick(x=>x.status!=='ready')", "const ready=pick(x=>x.status==='ready'&&Number(x.body_length||0)>=40), pending=pick(x=>x.status!=='ready'||Number(x.body_length||0)<40)");

@@ -13,7 +13,7 @@ function leExtract(a,body){
   const excerpt=exactExcerpt(body,x.excerpt);if(!excerpt)continue;
   outcomes.push({kind:x.kind,text:clean(x.text,800),reasoning:clean(x.reasoning,900),excerpt,limits:clean(x.limits,600),practice:clean(x.practice,700)});
  }
- return {version:1,scope:body.length>10000?'Beginning and ending of saved text; middle omitted.':'Saved text only; original completeness unverified.',outcomes,principles:lePrinciples(a.proposed_principles,body),rejected_principles:Math.max(0,(Array.isArray(a.proposed_principles)?a.proposed_principles.length:0)-lePrinciples(a.proposed_principles,body).length)};
+ return {version:2,scope:body.length>10000?'Beginning and ending of saved text; middle omitted.':'Saved text only; original completeness unverified.',outcomes,principles:lePrinciples(a.proposed_principles,body),rejected_principles:Math.max(0,(Array.isArray(a.proposed_principles)?a.proposed_principles.length:0)-lePrinciples(a.proposed_principles,body).length)};
 }
 async function leTable(env){await env.DB.prepare('CREATE TABLE IF NOT EXISTS source_learning (source_id TEXT PRIMARY KEY,content TEXT NOT NULL,created_at TEXT NOT NULL)').run()}
 async function leRead(env,sourceId){

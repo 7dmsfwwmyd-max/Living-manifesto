@@ -15,7 +15,8 @@ const prior=(await api('sources')).sources.filter(s=>s.status==='ready'&&/^Relea
 let id,analysed,usedPrior=false;
 for(const row of prior){
  const detail=await api('sources/'+row.id);
- if(detail.source.body===text&&detail.ideas.some(i=>i.excerpt&&text.toLowerCase().includes(i.excerpt.toLowerCase()))){
+ if(detail.source.body===text&&detail.learning)console.log('PRIOR_SYNTHETIC_LEARNING '+JSON.stringify(detail.learning));
+ if(detail.learning?.version===4&&detail.learning.outcomes.length>=2&&detail.source.body===text&&detail.ideas.some(i=>i.excerpt&&text.toLowerCase().includes(i.excerpt.toLowerCase()))){
   id=row.id;analysed=detail;usedPrior=true;break;
  }
 }
@@ -34,6 +35,14 @@ if(!id){
  }
 }
 assert.equal(analysed.source.status,'ready','Capture did not complete automatic analysis: '+(analysed.source.error||analysed.source.status));
+console.log('CURRENT_SYNTHETIC_LEARNING '+JSON.stringify(analysed.learning));
+assert.ok(analysed.learning?.outcomes.length>=2,'New learning extraction did not produce distinct grounded outputs');
+assert.ok(analysed.learning.outcomes.some(x=>['skill','application'].includes(x.kind)),'Actionable fixture must yield a practice task');
+for(const item of analysed.learning.outcomes){assert.ok(text.toLowerCase().includes(item.excerpt.toLowerCase()));assert.ok(item.reasoning&&item.limits&&item.practice)}
+assert.ok(analysed.learning.principles.every(p=>p.rationale.includes('AI-inferred candidate')&&p.rationale.includes('Boundaries:')));
+assert.equal(analysed.source.body,text,'Only the synthetic fixture may be logged');
+console.log('SYNTHETIC_LEARNING_REVIEW '+JSON.stringify(analysed.learning));
+console.log('PASS structured learning outputs: '+analysed.learning.outcomes.map(x=>x.kind).join(', ')+'; candidate principles: '+analysed.learning.principles.length);
 console.log(usedPrior?'PASS grounded analysis from previous LIVE staging fixture reused (no new AI call)':'PASS fresh automatic analysis with live free-tier AI');
 assert.ok(analysed.source.summary?.length>20);assert.ok(analysed.ideas.length>0);
 assert.ok(analysed.ideas.some(i=>i.excerpt&&text.toLowerCase().includes(i.excerpt.toLowerCase())));

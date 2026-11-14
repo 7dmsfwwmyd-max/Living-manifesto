@@ -1,8 +1,5 @@
 name: Read-only source health counts
 on:
-  push:
-    branches: ['feature/today-capture-repair']
-    paths: ['scripts/source-health.mjs', '.github/workflows/source-health.yml']
   workflow_dispatch:
 permissions:
   contents: read

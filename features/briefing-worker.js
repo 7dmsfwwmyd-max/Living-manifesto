@@ -14,7 +14,7 @@ async function brPreferences(env){
 function brHide(p,ref){if(!p||!p.hidden_until)return false;return brDate(p.hidden_until)>ref}
 async function brRead(env){
  const stamp=now(),ref=brDate(stamp);
- const sources=await rows(env.DB.prepare('SELECT id,title,summary,status,retrieval,error,created_at,updated_at,disciplines,length(body) AS body_length,attempts FROM sources ORDER BY created_at DESC LIMIT 100'));
+ const sources=await rows(env.DB.prepare('SELECT id,title,url,note,summary,status,retrieval,error,created_at,updated_at,disciplines,length(body) AS body_length,attempts FROM sources ORDER BY created_at DESC LIMIT 100'));
  const known=new Map(sources.map(s=>[s.id,s]));
  const auditTable=await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='evidence_audits'").first();
  const audits=auditTable?await rows(env.DB.prepare('SELECT source_id,content,verified_at FROM evidence_audits ORDER BY verified_at DESC LIMIT 100')):[];
@@ -37,21 +37,21 @@ async function brRead(env){
  const due=Object.entries(learning.reviews).slice(0,250).flatMap(([id,list])=>{
   if(!BR_ID.test(id)||!Array.isArray(list)||!list.length)return[];
   const latest=list[0],t=brDate(latest.next_review);
-  if(!t||t>ref)return[];
-  return [{id,title:brText(known.get(id)?.title||latest.title||'Previously studied source',170),due:latest.next_review,confidence:latest.confidence}];
+  if(!t||t>ref||known.has(id)&&Number(known.get(id).body_length||0)<40)return[];
+  return [{id,title:brText(known.has(id)?sourceLabel(known.get(id)):(latest.title||'Previously studied source'),170),due:latest.next_review,confidence:latest.confidence}];
  }).sort((a,b)=>brDate(a.due)-brDate(b.due)).slice(0,12);
  for(const d of due)push({key:'review:'+d.id,kind:'review',title:d.title,explanation:'Active recall due '+brText(d.due,10)+' · last confidence '+brText(d.confidence,16),why:'A review you scheduled after studying this source.',source_id:d.id,due_at:d.due,score:120+Math.min(40,brAge(d.due,ref)*5),action_label:'Review source'});
  for(const s of sources){
   if(!BR_ID.test(s.id))continue;
-  const age=brAge(s.created_at,ref),title=brText(s.title||'Untitled source',170);
-  if(s.status==='ready'&&!reviewed.has(s.id)&&age<=30){
+  const age=brAge(s.created_at,ref),title=brText(sourceLabel(s),170),hasText=Number(s.body_length||0)>=40;
+  if(s.status==='ready'&&hasText&&!reviewed.has(s.id)&&age<=30){
    push({key:'source:'+s.id,kind:'reading',title,explanation:brText(s.summary,300)||'Analysed source ready to study.',why:'Saved '+brText(s.created_at,10)+(important.has(s.id)?' · Included in your own learning path':'')+'. This is its capture date, not its publication date.',source_id:s.id,captured_at:s.created_at,score:80+(important.has(s.id)?18:0)+Math.max(0,15-Math.round(age)),action_label:'Read and understand'});
   }
-  if(['queued','awaiting_content','awaiting_ai','failed','processing'].includes(s.status)){
-   const next=s.status==='awaiting_content'?'Add readable source text':s.status==='failed'&&s.attempts>=3?'Manual review needed':s.status==='processing'?'In progress':s.status==='awaiting_ai'?'Free AI currently unavailable':'Awaiting processing';
-   push({key:'processing:'+s.id,kind:'processing',title,explanation:next+(s.error?' · '+brText(s.error,170):''),why:'Source capture is not yet a completed analysis. Attempt count: '+Number(s.attempts||0)+'.',source_id:s.id,score:75+(s.status==='awaiting_content'||s.status==='failed'?18:0),action_label:'Inspect processing'});
+  if(!hasText||['queued','awaiting_content','awaiting_ai','failed','processing'].includes(s.status)){
+   const next=!hasText?'No readable source text saved':s.status==='awaiting_content'?'Add readable source text':s.status==='failed'&&s.attempts>=3?'Manual review needed':s.status==='processing'?'In progress':s.status==='awaiting_ai'?'Free AI currently unavailable':'Awaiting processing';
+   push({key:'processing:'+s.id,kind:'processing',title,explanation:next+(s.error?' · '+brText(s.error,170):''),why:'Source capture is not yet a completed analysis. Attempt count: '+Number(s.attempts||0)+'.',source_id:s.id,score:75+(s.status==='awaiting_content'||s.status==='failed'?18:0),action_label:hasText?'Inspect processing':'Add source text',has_saved_text:hasText,source_url:s.url||''});
   }
-  if(s.status==='ready'){
+  if(s.status==='ready'&&hasText){
    const audit=auditMap.get(s.id);
    let anchored=0,claims=0,missing=0;
    if(audit)try{const a=JSON.parse(audit.content);claims=a.counts?.claims||0;anchored=a.counts?.anchored||0;missing=a.counts?.missing_or_unmatched||0}catch{}
@@ -83,11 +83,13 @@ async function brRead(env){
  entries.sort((a,b)=>b.score-a.score||(priority[a.kind]??10)-(priority[b.kind]??10)||a.key.localeCompare(b.key));
  const preferences=await brPreferences(env),prefMap=new Map(preferences.map(p=>[p.item_key,p]));
  let hiddenCount=0;
- const selected=entries.filter(x=>{if(brHide(prefMap.get(x.key),ref)){hiddenCount++;return false}return true}).slice(0,24);
+ const visible=entries.filter(x=>{if(brHide(prefMap.get(x.key),ref)){hiddenCount++;return false}return true});
+ const selected=visible.filter(x=>x.kind!=='processing').slice(0,24);
+ const attention=visible.filter(x=>x.kind==='processing').slice(0,24);
  const hidden=preferences.filter(p=>brHide(p,ref)).slice(0,15).map(p=>({key:p.item_key,hidden_until:p.hidden_until,revision:p.revision}));
  return {version:'0.5.8',generated_at:stamp,items:selected.map(x=>({...x,preference_revision:prefMap.get(x.key)?.revision||0})),
-  hidden,counts:{due_reviews:due.length,processing:sources.filter(x=>x.status!=='ready').length,
-   eligible_items:entries.length,hidden: hiddenCount,displayed:selected.length,concepts_missing_sources:concepts.filter(n=>{try{return !JSON.parse(n.source_refs||'[]').length}catch{return true}}).length},
+  attention:attention.map(x=>({...x,preference_revision:prefMap.get(x.key)?.revision||0})),hidden,counts:{due_reviews:due.length,processing:sources.filter(x=>x.status!=='ready'||Number(x.body_length||0)<40).length,
+   eligible_items:entries.length,hidden: hiddenCount,displayed:selected.length,attention:attention.length,concepts_missing_sources:concepts.filter(n=>{try{return !JSON.parse(n.source_refs||'[]').length}catch{return true}}).length},
   limits:{sources:100,review_sources:250,concepts:30,manual_links:80,display_items:24},
   methodology:'Transparent deterministic priority based on due study reviews, processing gaps, stored-text evidence checks, manually saved reading paths and recent CAPTURES. No live discovery, publication-date inference, AI ranking or factual corroboration.'};
 }

@@ -16,7 +16,7 @@ let id,analysed,usedPrior=false;
 for(const row of prior){
  const detail=await api('sources/'+row.id);
  if(detail.source.body===text&&detail.learning)console.log('PRIOR_SYNTHETIC_LEARNING '+JSON.stringify(detail.learning));
- if(detail.learning?.version===2&&detail.learning.outcomes.length>=2&&detail.source.body===text&&detail.ideas.some(i=>i.excerpt&&text.toLowerCase().includes(i.excerpt.toLowerCase()))){
+ if(detail.learning?.version===3&&detail.learning.outcomes.length>=2&&detail.source.body===text&&detail.ideas.some(i=>i.excerpt&&text.toLowerCase().includes(i.excerpt.toLowerCase()))){
   id=row.id;analysed=detail;usedPrior=true;break;
  }
 }

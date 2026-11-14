@@ -83,6 +83,8 @@ assert.equal((await api(path,'POST',{})).cached,true);
 assert.ok(analysed.learning?.outcomes.length>=2,'New learning extraction did not produce distinct grounded outputs');
 for(const item of analysed.learning.outcomes){assert.ok(text.toLowerCase().includes(item.excerpt.toLowerCase()));assert.ok(item.reasoning&&item.limits&&item.practice)}
 assert.ok(analysed.learning.principles.every(p=>p.rationale.includes('AI-inferred candidate')&&p.rationale.includes('Boundaries:')));
+assert.equal(analysed.source.body,text,'Only the synthetic fixture may be logged');
+console.log('SYNTHETIC_LEARNING_REVIEW '+JSON.stringify(analysed.learning));
 console.log('PASS structured learning outputs: '+analysed.learning.outcomes.map(x=>x.kind).join(', ')+'; candidate principles: '+analysed.learning.principles.length);
 const backup=await api('export');assert.ok(backup.learning_dossiers.some(d=>d.source_id===id));
 for(const [label,url] of [['X',process.env.TEST_X_URL],['PDF',process.env.TEST_PDF_URL]]){

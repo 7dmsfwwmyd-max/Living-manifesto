@@ -1,0 +1,24 @@
+import {readFile,writeFile} from 'node:fs/promises';
+let w=await readFile('dist/_worker.js','utf8'),a=await readFile('dist/app.js','utf8');
+function replace(s,n,v){if(!s.includes(n))throw Error('Learning extraction anchor missing: '+n.slice(0,90));return s.replace(n,()=>v)}
+w=(await readFile('features/learning-extraction-worker.js','utf8'))+'\n'+w;
+w=replace(w,'// Structured analysis from an explicitly authorized local Shortcut',`SCHEMA.properties.learning_outputs=LE_SCHEMA;
+SCHEMA.required.push('learning_outputs');
+SCHEMA.properties.proposed_principles={type:'array',maxItems:2,items:{type:'object',additionalProperties:false,required:LE_PRINCIPLE_FIELDS,properties:Object.fromEntries(LE_PRINCIPLE_FIELDS.map(k=>[k,{type:'string'}]))}};
+// Structured analysis from an explicitly authorized local Shortcut`);
+const instructions=' Distinguish topics from transferable principles. A topic such as Incentives is NEVER a principle. First reconstruct premises, mechanisms and evidence; infer implications; test alternatives and boundaries; then classify the useful outputs. learning_outputs is an array of up to FIVE concise objects with kind (knowledge, insight, question, skill, application), text, reasoning, excerpt, limits, practice. Aim for one of each type only where warranted; empty categories are valid. Knowledge describes what the source claims or explains, not independently verified facts. Insights must label inferential steps. Questions expose unresolved issues. Skills name a trainable capability and a concrete exercise. Applications specify an action, prediction and observable success/failure criterion. practice should prompt retrieval, a worked transfer case or an experiment with feedback. Every output needs a short EXACT excerpt from supplied text; reasoning explains how it supports the output and limits states uncertainty or a competing explanation. Principles are optional: return [] unless useful conditional guidance follows. Each principle needs text (a full actionable proposition, never a subject heading), rationale (explicit reasoning from observation to inference), excerpt (exact supporting words), limits (where it fails), application (a concrete decision or test). Mark principles as inferred candidates; do not attribute them to the author unless explicit. Prefer no principle to a generic slogan. Example: before trusting a forecast, examine the forecaster’s incentives; NOT Incentives. Connections to previous ideas must explain reinforcement, qualification or contradiction using supplied real IDs; do not invent agreement. Retain concise valid JSON within 2400 output tokens: summary 120-160 words, two detailed ideas, short learning outputs, zero or one principle normally.';
+w=replace(w,'const a=await llm(env,sys,prompt,SCHEMA);','const a=await llm(env,sys+'+JSON.stringify(instructions)+',prompt,SCHEMA);');
+w=replace(w,'const timestamp=now(),ideaIds=valid.map(()=>id());','const learning=leExtract(a,body);await leTable(env);\n  const timestamp=now(),ideaIds=valid.map(()=>id());');
+w=replace(w,'for(const p of (a.proposed_principles||[]).slice(0,2))','for(const p of learning.principles)');
+w=replace(w,'  await env.DB.batch(statements);\n  // Succeed even',`  statements.push(env.DB.prepare("INSERT OR IGNORE INTO source_learning(source_id,content,created_at) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM sources WHERE id=? AND status='ready' AND updated_at=?)").bind(uid,JSON.stringify(learning),timestamp,uid,timestamp));
+  await env.DB.batch(statements);
+  // Succeed even`);
+w=replace(w,'const t=now(),ideaIds=ideas.map(()=>id());','const learning=leExtract(a,body);await leTable(env);\n const t=now(),ideaIds=ideas.map(()=>id());');
+w=replace(w,'for(const p of (Array.isArray(a.proposed_principles)?a.proposed_principles:[]).slice(0,2))','for(const p of learning.principles)');
+w=replace(w,' await env.DB.batch(statements);\n return {id:source.id'," statements.push(env.DB.prepare('INSERT OR IGNORE INTO source_learning(source_id,content,created_at) VALUES(?,?,?)').bind(source.id,JSON.stringify(learning),t));\n await env.DB.batch(statements);\n return {id:source.id");
+w=replace(w,'proposed_principles:Math.min((a.proposed_principles||[]).length,2)','proposed_principles:learning.principles.length');
+w=replace(w,'return json({source,ideas,links})','return json({source,ideas,links,learning:await leRead(env,source.id)})');
+w=replace(w,'const out={knowledge_topics:',`const hasLearning=await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='source_learning'").first();const out={source_learning:hasLearning?await rows(env.DB.prepare('SELECT * FROM source_learning')):[],knowledge_topics:`);
+w=replace(w,"version:'0.5.12'","version:'0.5.13'");a=a.replaceAll('v0.5.12','v0.5.13');
+a=replace(a,'start();',(await readFile('features/learning-extraction-app.js','utf8'))+'\nstart();');
+await writeFile('dist/_worker.js',w);await writeFile('dist/app.js',a);

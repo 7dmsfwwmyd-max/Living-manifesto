@@ -227,7 +227,7 @@ try{
  assert.ok(await evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'Models overflow mobile viewport');
  const modelScreenshot=await command('Page.captureScreenshot',{format:'png'});await writeFile('staging-models.png',Buffer.from(modelScreenshot.data,'base64'));
  await command('Page.reload',{ignoreCache:true});
- await until('typeof state!=="undefined"&&state.signedIn===true','model reload signed in');
+ await until('typeof state!=="undefined"&&state.signedIn===true&&!!document.querySelector("[data-nav=Models]")','model reload signed in');
  await evaluate('document.querySelector("[data-nav=Models]").click();mmOpen('+JSON.stringify(modelId)+')');
  assert.equal(await evaluate('mmUI.page.model.notes'),revisedNote,'Model notes lost on reload');
  await evaluate('document.querySelector("[data-mm-back]").click();true');

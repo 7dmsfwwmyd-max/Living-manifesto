@@ -203,6 +203,38 @@ try{
  assert.equal(await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+')'),true,'Recall was lost across browser reload');
  await evaluate('ktOpen('+JSON.stringify(topicId)+')');
  assert.equal(await evaluate('knowledge.active.current_view'),revisedView,'Topic view lost after reload');
+ await evaluate('document.querySelector("[data-nav=Models]").click();true');
+ await until('Array.isArray(mmUI.models)&&!mmUI.loading','mental-model library');
+ assert.ok(await evaluate('mmUI.models.some(x=>x.id==="model-base-rates")'),'Starter models missing');
+ await evaluate('mmOpen("model-inversion")');
+ assert.ok(await evaluate('document.body.innerText.includes("Where it can mislead")'),'Model boundaries missing');
+ await evaluate('document.querySelector("[data-mm-back]").click();document.querySelector("[data-mm-new]").click();true');
+ await until('!!document.getElementById("mm-editor")','custom model editor');
+ const modelName='Browser validation model '+commit.slice(0,12);
+ const modelNote='Applied this model to a synthetic decision and compared observations with interpretations.';
+ await evaluate('(()=>{for(const [key,value] of Object.entries('+JSON.stringify({name:modelName,definition:'A synthetic model for checking assumptions against observed evidence.',notes:modelNote})+')){const input=document.getElementById("mm-"+key);input.value=value;input.dispatchEvent(new Event("input",{bubbles:true}))}const check=[...document.querySelectorAll("[data-mm-source]")].find(x=>x.dataset.mmSource==='+JSON.stringify(sourceId)+');if(!check)throw Error("Source checkbox absent");check.checked=true;check.dispatchEvent(new Event("change",{bubbles:true}));const stage=document.getElementById("mm-stage");stage.value="practising";stage.dispatchEvent(new Event("change",{bubbles:true}));document.getElementById("mm-editor").requestSubmit();return true})()');
+ await until('mmUI.page?.model.name==='+JSON.stringify(modelName)+'&&!mmUI.busy&&!mmUI.editing','model saved');
+ const modelId=await evaluate('mmUI.page.model.id');
+ assert.equal(await evaluate('mmUI.page.sources.some(x=>x.id==='+JSON.stringify(sourceId)+')'),true,'Article link missing');
+ await evaluate('document.querySelector("[data-mm-edit]").click();true');
+ const revisedNote='Revised application: an independent check contradicted my initial interpretation.';
+ await evaluate('(()=>{const input=document.getElementById("mm-notes");input.value='+JSON.stringify(revisedNote)+';input.dispatchEvent(new Event("input",{bubbles:true}));document.getElementById("mm-editor").requestSubmit();return true})()');
+ await until('mmUI.page?.model.notes==='+JSON.stringify(revisedNote)+'&&!mmUI.busy','model revision saved');
+ await evaluate('document.querySelector("[data-mm-history]").click();true');
+ await until('Array.isArray(mmUI.history)','model history');
+ assert.equal(await evaluate('mmUI.history.some(x=>x.model.notes==='+JSON.stringify(modelNote)+')'),true,'Original reflection missing');
+ assert.equal(await evaluate('(async()=>{const b=await api("export");return b.mental_models.some(x=>x.id==='+JSON.stringify(modelId)+'&&x.notes==='+JSON.stringify(revisedNote)+')&&b.mental_model_history.some(x=>x.model_id==='+JSON.stringify(modelId)+')})()'),true,'Model backup missing');
+ assert.ok(await evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'Models overflow mobile viewport');
+ const modelScreenshot=await command('Page.captureScreenshot',{format:'png'});await writeFile('staging-models.png',Buffer.from(modelScreenshot.data,'base64'));
+ await command('Page.reload',{ignoreCache:true});
+ await until('typeof state!=="undefined"&&state.signedIn===true&&!!document.querySelector("[data-nav=Models]")','model reload signed in');
+ await evaluate('document.querySelector("[data-nav=Models]").click();mmOpen('+JSON.stringify(modelId)+')');
+ assert.equal(await evaluate('mmUI.page.model.notes'),revisedNote,'Model notes lost on reload');
+ await evaluate('document.querySelector("[data-mm-back]").click();true');
+ await until('Array.isArray(mmUI.models)&&!mmUI.loading','model list after reload');
+ await evaluate('(()=>{const f=document.getElementById("mm-search");f.elements.query.value='+JSON.stringify(modelName)+';f.requestSubmit();return true})()');
+ assert.equal(await evaluate('document.querySelectorAll("[data-mm-open]").length'),1,'Model search did not narrow results');
+ console.log('PASS real mobile mental-model UI: starters, custom model, linked article, practice stage, personal reflection, revision history, export, search, reload persistence and viewport fit. No AI requests.');
  console.log('PASS authenticated Chromium: login, recall and reviews, learning paths, manual links, D1 cloud sync, fresh-device restore, provenance graph, backup and reload persistence. No additional AI requests; evergreen notes, verified quotations and exports passed.');
 }finally{
  try{ws?.close()}catch{}

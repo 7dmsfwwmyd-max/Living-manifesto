@@ -343,7 +343,7 @@ test('Daily briefing UI: escapes untrusted titles and renders independent source
 test('Health readiness: exact built Git SHA is embedded in PUBLIC health, not private briefing payload',async()=>{
  const s=await setup();
  const health=await (await s.req('health')).json();
- assert.equal(health.version,'0.5.13');
+ assert.equal(health.version,'0.5.14');
  assert.match(health.commit,/^[0-9a-f]{40}$/);
  const result=await (await s.req('briefing')).json();
  assert.equal(result.version,'0.5.8');
@@ -589,4 +589,40 @@ test('Learning extraction UI: separates output types, escapes inference and dist
  assert.match(vm.runInContext('learningOutputsMarkup({source:{id:"old"}})',context),/earlier analysis/);
  const d={source:{id:'new'},learning:{scope:'Saved text',outcomes:[{kind:'insight',text:'<script>bad</script>',reasoning:'An inference',excerpt:'source passage',limits:'uncertain',practice:'Test in a new setting'}],principles:[]}};
  const html=vm.runInContext('learningOutputsMarkup('+JSON.stringify(d)+')',context);assert.ok(!html.includes('<script>'));assert.ok(html.includes('&lt;script&gt;'));assert.match(html,/No candidate met/);for(const label of ['Knowledge','Insight','Open question','Skill','Application','Principles'])assert.ok(html.includes(label));
+});
+
+test('Mental models: private read-only starters, bounded guides and no inference',async()=>{
+ const s=await setup();assert.equal((await s.req('mental-models','GET',undefined,{cookie:''})).status,401);
+ const {models}=await (await s.req('mental-models')).json();assert.equal(models.length,10);assert.ok(models.every(m=>m.revision===0&&m.definition&&m.limitations&&m.exercise&&m.source_ids.length===0));
+ assert.equal(s.env.DB.db.prepare("SELECT name FROM sqlite_master WHERE name='mental_models'").get(),undefined);
+ const d=await (await s.req('mental-models/model-base-rates')).json();assert.match(d.model.example,/20%/);assert.equal(s.calls(),0);
+ assert.equal((await s.req('mental-models/model-base-rates','DELETE')).status,405);
+});
+test('Mental models: personal edits, linked sources, history, archive and export preserve originals',async()=>{
+ const s=await setup();const {id}=await (await s.req('capture','POST',{body,title:'Model evidence'})).json();await Promise.all(s.pending);const before=s.calls();
+ const original=(await (await s.req('mental-models/model-inversion')).json()).model;
+ const edited={...original,notes:'Applied inversion to a manager meeting. Missing incentives evidence changed my questions.',source_ids:[id],stage:'practising',favourite:true};
+ let response=await s.req('mental-models/'+original.id,'PUT',{revision:0,model:edited});assert.equal(response.status,200);const first=(await response.json()).model;assert.equal(first.revision,1);
+ response=await s.req('mental-models/'+original.id,'PUT',{revision:1,model:{...first,notes:'Second application: checked the biggest controllable failure first.',archived:true}});assert.equal(response.status,200);
+ const history=await (await s.req('mental-models/'+original.id+'/history')).json();assert.equal(history.history[0].model.notes,edited.notes);
+ const page=await (await s.req('mental-models/'+original.id)).json();assert.equal(page.sources[0].id,id);assert.equal(page.model.archived,true);
+ const backup=await (await s.req('export')).json();assert.equal(backup.mental_models.length,10);assert.equal(backup.mental_model_history.length,1);assert.equal(backup.sources.find(x=>x.id===id).body,body);assert.equal(s.calls(),before);
+ const created=await s.req('mental-models','POST',{model:{...original,name:'My own decision model',definition:'A personal model for organising an uncertain decision.'}});assert.equal(created.status,201);assert.match((await created.json()).model.origin,/Your own/);
+});
+test('Mental models: racing starter edits, stale edits and invalid references are rejected',async()=>{
+ const s=await setup();const m=(await (await s.req('mental-models/model-incentives')).json()).model;
+ const results=await Promise.all([s.req('mental-models/'+m.id,'PUT',{revision:0,model:{...m,notes:'First device'}}),s.req('mental-models/'+m.id,'PUT',{revision:0,model:{...m,notes:'Second device'}})]);assert.deepEqual(results.map(x=>x.status).sort(),[200,409]);
+ assert.equal((await s.req('mental-models/'+m.id,'PUT',{revision:0,model:m})).status,409);
+ assert.equal((await s.req('mental-models','POST',{model:{...m,source_ids:['aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa']}})).status,422);
+ assert.equal((await s.req('mental-models','POST',{model:{...m,name:'x'.repeat(121)}})).status,422);
+ assert.equal((await s.req('mental-models','POST',{model:m},{Origin:'https://other.example'})).status,403);
+});
+test('Mental models UI: search, escaped examples, personal drafts and mobile navigation',async()=>{
+ const app={innerHTML:''},document={getElementById:()=>app,addEventListener(){},querySelector:()=>null};const context=vm.createContext({document,navigator:{},location:{protocol:'http:'},fetch:async()=>new Response('',{status:401}),setTimeout:(fn,ms)=>setTimeout(fn,ms).unref(),clearTimeout,console,URL,localStorage:{getItem:()=>null}});vm.runInContext(readFileSync('dist/app.js','utf8'),context);await new Promise(r=>setTimeout(r,10));
+ const m={id:'model-example',name:'<script>unsafe</script>',category:'Judgement',definition:'A model with a deliberately escaped title',mechanism:'mechanism',when_to_use:'decision',example:'<img src=x>',limitations:'limits',exercise:'exercise',notes:'My private draft',source_ids:[],stage:'exploring',favourite:false,archived:false,revision:0};
+ let html=vm.runInContext('mmUI.models=['+JSON.stringify(m)+'];mentalModels()',context);assert.ok(!html.includes('<script>'));assert.ok(html.includes('&lt;script&gt;'));
+ assert.match(vm.runInContext('mmUI.query="unmatched";mentalModels()',context),/No matches/);
+ html=vm.runInContext('mmUI.selected="model-example";mmUI.page={model:mmUI.models[0],sources:[]};mentalModels()',context);assert.ok(html.includes('&lt;img src=x&gt;'));assert.ok(!html.includes('<img src=x>'));
+ vm.runInContext('mmStartEdit(mmUI.models[0]);mmUI.drafts["model-example"].notes="Unsaved reflection";mmUI.editing=false;mmStartEdit(mmUI.models[0])',context);assert.match(vm.runInContext('mmEditor()',context),/Unsaved reflection/);
+ assert.equal(vm.runInContext('NAV.includes("Models")',context),true);assert.match(readFileSync('dist/styles.css','utf8'),/mobile-nav\{display:grid;grid-template-columns:repeat\(6,1fr\)/);
 });

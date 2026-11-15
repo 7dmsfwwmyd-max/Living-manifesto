@@ -36,5 +36,6 @@ jobs:
             dist/
             staging-validation.json
             staging-topics.png
+            staging-models.png
           include-hidden-files: true
           retention-days: 30

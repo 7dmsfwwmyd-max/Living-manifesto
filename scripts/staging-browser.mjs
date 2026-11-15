@@ -234,6 +234,19 @@ try{
  await until('Array.isArray(mmUI.models)&&!mmUI.loading','model list after reload');
  await evaluate('(()=>{const f=document.getElementById("mm-search");f.elements.query.value='+JSON.stringify(modelName)+';f.requestSubmit();return true})()');
  assert.equal(await evaluate('document.querySelectorAll("[data-mm-open]").length'),1,'Model search did not narrow results');
+ // Use the existing synthetic fixture; restore it even if an assertion fails.
+ await evaluate('visit('+JSON.stringify(sourceId)+')');
+ await until('!!document.querySelector("[data-trash-remove]")','source management');
+ try{
+  await evaluate('document.querySelector("[data-trash-remove]").click();true');
+  await until('!trashUI.busy&&!state.sources.some(x=>x.id==='+JSON.stringify(sourceId)+')','source moved to trash');
+  await evaluate('document.querySelector("[data-trash-open]").click();true');
+  await until('trashUI.open&&!trashUI.busy&&trashUI.sources.some(x=>x.id==='+JSON.stringify(sourceId)+')','trash list');
+  assert.ok(await evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'Trash overflows mobile viewport');
+  await evaluate('[...document.querySelectorAll("[data-trash-restore]")].find(x=>x.dataset.trashRestore==='+JSON.stringify(sourceId)+').click();true');
+  await until('!trashUI.busy&&state.sources.some(x=>x.id==='+JSON.stringify(sourceId)+')','source restored');
+ }finally{await evaluate('(async()=>{await api("sources/'+sourceId+'/restore",{method:"POST",body:"{}"});return true})()')}
+ console.log('PASS mobile source trash: remove, active-list exclusion, trash listing, restore and viewport fit.');
  console.log('PASS real mobile mental-model UI: starters, custom model, linked article, practice stage, personal reflection, revision history, export, search, reload persistence and viewport fit. No AI requests.');
  console.log('PASS authenticated Chromium: login, recall and reviews, learning paths, manual links, D1 cloud sync, fresh-device restore, provenance graph, backup and reload persistence. No additional AI requests; evergreen notes, verified quotations and exports passed.');
 }finally{

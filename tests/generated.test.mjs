@@ -343,7 +343,7 @@ test('Daily briefing UI: escapes untrusted titles and renders independent source
 test('Health readiness: exact built Git SHA is embedded in PUBLIC health, not private briefing payload',async()=>{
  const s=await setup();
  const health=await (await s.req('health')).json();
- assert.equal(health.version,'0.5.14');
+ assert.equal(health.version,'0.5.15');
  assert.match(health.commit,/^[0-9a-f]{40}$/);
  const result=await (await s.req('briefing')).json();
  assert.equal(result.version,'0.5.8');
@@ -625,4 +625,41 @@ test('Mental models UI: search, escaped examples, personal drafts and mobile nav
  html=vm.runInContext('mmUI.selected="model-example";mmUI.page={model:mmUI.models[0],sources:[]};mentalModels()',context);assert.ok(html.includes('&lt;img src=x&gt;'));assert.ok(!html.includes('<img src=x>'));
  vm.runInContext('mmStartEdit(mmUI.models[0]);mmUI.drafts["model-example"].notes="Unsaved reflection";mmUI.editing=false;mmStartEdit(mmUI.models[0])',context);assert.match(vm.runInContext('mmEditor()',context),/Unsaved reflection/);
  assert.equal(vm.runInContext('NAV.includes("Models")',context),true);assert.match(readFileSync('dist/styles.css','utf8'),/mobile-nav\{display:grid;grid-template-columns:repeat\(6,1fr\)/);
+});
+
+test('Trash: authenticated reversible removal hides sources and ideas, preserves knowledge and exports',async()=>{
+ const s=await setup();const {id}=await (await s.req('capture','POST',{title:'Trash regression',body,url:'https://example.org/trash-test'})).json();await Promise.all(s.pending);
+ const before=await (await s.req('export')).json(),calls=s.calls();
+ assert.equal((await s.req('sources/'+id+'/trash','POST',{}, {cookie:''})).status,401);
+ assert.equal((await s.req('sources/'+id+'/trash','POST',{}, {Origin:'https://evil.example'})).status,403);
+ assert.equal((await s.req('sources/'+id+'/trash','GET')).status,405);
+ assert.equal((await s.req('sources/'+id+'/trash','POST',{})).status,200);
+ assert.equal((await s.req('sources/'+id+'/trash','POST',{})).status,200);
+ assert.equal((await (await s.req('sources')).json()).sources.length,0);
+ assert.equal((await (await s.req('ideas')).json()).ideas.length,0);
+ assert.equal((await (await s.req('trash')).json()).sources.length,1);
+ const detail=await (await s.req('sources/'+id)).json();assert.equal(detail.source.body,body);assert.ok(detail.source.trashed_at);
+ assert.equal((await s.req('sources/'+id+'/process','POST',{})).status,409);
+ assert.equal((await s.req('capture','POST',{url:'https://example.org/trash-test',note:'Should not append'})).status,409);
+ const backup=await (await s.req('export')).json();assert.deepEqual(backup.sources,before.sources);assert.deepEqual(backup.ideas,before.ideas);assert.deepEqual(backup.beliefs,before.beliefs);assert.equal(backup.source_trash.length,1);
+ const briefing=await (await s.req('briefing')).json();assert.ok(!briefing.items.some(x=>x.source_id===id));
+ assert.equal((await s.req('sources/'+id+'/restore','POST',{})).status,200);
+ assert.equal((await s.req('sources/'+id+'/restore','POST',{})).status,200);
+ assert.equal((await (await s.req('sources')).json()).sources.length,1);
+ assert.deepEqual((await (await s.req('sources/'+id)).json()).ideas,before.ideas);
+ assert.equal((await (await s.req('trash')).json()).sources.length,0);assert.equal(s.calls(),calls);
+});
+test('Trash: queued sources are skipped by scheduled processing and resume after restore',async()=>{
+ const s=await setup();delete s.env.CONVERTER;const {id}=await (await s.req('capture','POST',{title:'Queued',body})).json();await Promise.all(s.pending);
+ const attempts=(await (await s.req('sources/'+id)).json()).source.attempts;await s.req('sources/'+id+'/trash','POST',{});const pending=[];s.env.CONVERTER={run:async()=>{throw Error('must not run')}};
+ await worker.scheduled({},s.env,{waitUntil:p=>pending.push(p)});await Promise.all(pending);
+ assert.equal((await (await s.req('sources/'+id)).json()).source.attempts,attempts);
+ await s.req('sources/'+id+'/restore','POST',{});assert.equal((await (await s.req('sources')).json()).sources[0].id,id);
+});
+test('Trash UI: escaped read-only removed source and reversible controls',async()=>{
+ const app={innerHTML:''},document={getElementById:()=>app,addEventListener(){},querySelector:()=>null};
+ const context=vm.createContext({document,navigator:{},location:{protocol:'http:'},fetch:async()=>new Response('',{status:401}),setTimeout:(fn,ms)=>setTimeout(fn,ms).unref(),clearTimeout,console,URL,localStorage:{getItem:()=>null}});
+ vm.runInContext(readFileSync('dist/app.js','utf8'),context);await new Promise(r=>setTimeout(r,10));
+ const html=vm.runInContext(`state.detail={source:{id:'test',title:'<script>bad</script>',body:'<img src=x>',trashed_at:'2026-11-15'}};detail()`,context);
+ assert.match(html,/Restore to library/);assert.ok(!html.includes('<script>'));assert.ok(!html.includes('Add or replace'));assert.ok(!html.includes('data-research-generate'));
 });

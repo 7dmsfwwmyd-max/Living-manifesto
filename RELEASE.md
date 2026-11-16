@@ -226,3 +226,11 @@ Source detail → Manage source → Move to trash removes a source from active L
 The change is additive: source_trash and filtered read views; no destructive migration, new provider, inference call, paid service or billing change. Auth and same-origin guards protect both actions. A duplicate URL captured through the main form reports that the source is in Trash instead of silently restoring it. Historical personal notes may still refer to a trashed source; the detail page labels it as in Trash and permits reading/restoring only.
 
 Local validation: 54 generated tests, including reversible removal, privacy/origin rejection, hidden source/idea reads, preserved full exports, duplicate protection, skipped processing, escaped read-only trash UI, and existing feature regressions. Isolated staging adds a mobile UI remove/list/restore round trip on synthetic data. Production verification to be recorded after promotion.
+
+
+### Verified production promotion — v0.5.15 (15 November 2026 UTC)
+
+- Exact release commit `bcbb7ac0419d40e92dfda1f036e9a8c25f1e4bad` passed [isolated staging 43750331731](https://github.com/7dmsfwwmyd-max/Living-manifesto/actions/runs/43750331731), including 54 generated tests and the authenticated mobile remove/list/restore round trip on synthetic staging data.
+- [Production promotion 43750637841](https://github.com/7dmsfwwmyd-max/Living-manifesto/actions/runs/43750637841) passed exact live asset hashes, release identity, anonymous access denial, original bindings and unchanged stored-data fingerprints. Worker version: `676b0d68-eb1f-4bd5-ac05-9ab9078d5e3b`. Rollback metadata is retained in the workflow artifact.
+- Authenticated production browser reloaded successfully and displayed Library → Trash with an empty list and the retention policy. An existing saved source reopened with Manage source present. No real production source was moved to trash during verification; the full reversible mutation was tested in staging. Actual iPhone/Home Screen verification was not performed.
+- The temporary promotion trigger was removed in commit `6e2b5156eeee3f3da0d9da74eaaf76ee73db8d97`; manual staging-validated promotion is restored. No new paid service, AI call path or billing change was introduced.

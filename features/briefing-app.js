@@ -31,7 +31,7 @@ function briefingMarkup(){
   ' uncited evergreen concepts · Generated '+esc(brShort(data.generated_at,16).replace('T',' '))+' UTC</p>';
  const all=data.items||[],attention=data.attention||all.filter(x=>x.kind==='processing');
  const view=briefing.filter==='processing'?attention:all.filter(x=>x.kind!=='processing'&&(briefing.filter==='all'||x.kind===briefing.filter));
- const list=briefing.showAll?view:view.slice(0,9);
+ const list=briefing.showAll?view:view.slice(0,3);
  html+='<div class="actions" role="group" aria-label="Filter briefing">'+
   [{key:'all',name:'All'},{key:'review',name:'Reviews'},{key:'reading',name:'Reading'},
    {key:'evidence',name:'Evidence'},{key:'processing',name:'Processing'},
@@ -40,7 +40,7 @@ function briefingMarkup(){
  if(!list.length)html+='<p class="small muted">No items in this category. Keep learning and saving material to build your agenda.</p>';
  for(const item of list){
   const id=item.source_id||'',concept=item.concept_id||'',key=esc(item.key);
-  html+='<article style="border-top:1px solid var(--border,#ddd);padding:12px 0">'+
+  html+='<article class="briefing-entry" style="border-top:1px solid var(--border,#ddd);padding:24px 0">'+
    '<div class="section-label">'+esc(brSectionLabel(item.kind))+'</div><h3>'+esc(brShort(item.title,170))+'</h3>'+
    (item.explanation?'<p>'+esc(brShort(item.explanation,300))+'</p>':'')+
    '<p class="small muted">Why this is here: '+esc(brShort(item.why,340))+'</p>'+
@@ -54,7 +54,7 @@ function briefingMarkup(){
    attention.slice(0,5).map(item=>'<article style="padding:10px 0"><h3>'+esc(brShort(item.title,170))+'</h3><p>'+esc(item.explanation)+'</p><button class="btn small" data-source="'+esc(item.source_id)+'">'+esc(item.action_label||'Inspect capture')+'</button></article>').join('')+
    '<button class="btn small" data-brief-filter="processing">Manage all incomplete captures</button></details>';
  }
- if(view.length>9)html+='<button class="btn small" data-brief-showall="1">'+(briefing.showAll?'Show fewer':'Show '+Math.min(view.length,24)+' items')+'</button>';
+ if(view.length>3)html+='<button class="btn small" data-brief-showall="1">'+(briefing.showAll?'Show fewer':'Show '+Math.min(view.length,24)+' items')+'</button>';
  if(data.hidden?.length){
   html+='<details><summary class="small muted">Hidden or snoozed suggestions ('+data.hidden.length+')</summary>';
   for(const x of data.hidden.slice(0,15))html+='<p class="small">'+esc(x.key)+' · '+(x.hidden_until.startsWith('9999')?'Dismissed':'Snoozed until '+esc(x.hidden_until.slice(0,10)))+
@@ -65,7 +65,7 @@ function briefingMarkup(){
  return html;
 }
 const brPriorToday=today;
-today=function(){return briefingMarkup()+brPriorToday()};
+today=function(){return '<div class="reading-home">'+briefingMarkup()+'</div>'};
 document.addEventListener('click',async event=>{
  const n=event.target?.closest?.('[data-brief-action],[data-brief-refresh],[data-brief-filter],[data-brief-showall],[data-brief-concept]');
  if(!n)return;

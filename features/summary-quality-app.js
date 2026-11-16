@@ -20,11 +20,9 @@ function summaryQualityMarkup(d){
  const body=String(s.body||'');
  let html='<article class="card" aria-label="Detailed source summary" style="margin:18px 0">'+
   '<div class="section-label">Research summary · source-grounded reading</div>'+
-  '<h2>Understand the argument, not just the headline</h2>'+
+  '<h2>Argument and evidence</h2>'+
   '<p class="small muted">'+summarySafe(summaryStatus(s),360)+'</p>';
- if(hasSummary){
-  html+='<h3>Executive overview</h3><p style="white-space:pre-wrap">'+summarySafe(s.summary,4000)+'</p>';
- }else html+='<p class="small muted">No executive summary was saved. The argument below comes from existing extracted ideas.</p>';
+ if(!hasSummary)html+='<p class="small muted">No executive summary was saved. The argument below comes from existing extracted ideas.</p>';
  if(!newSummary)html+='<p class="small muted">This is an earlier, shorter analysis. The breakdown below reuses saved claims, interpretations and source excerpts; it has not requested or invented a new AI summary.</p>';
  if(ideas.length){
   html+='<h3>Detailed argument and evidence</h3>'+
@@ -32,7 +30,7 @@ function summaryQualityMarkup(d){
   ideas.forEach((x,i)=>{
    const claim=String(x.statement||'').trim(),why=String(x.mechanism||'').trim(),evidence=String(x.evidence||'').trim(),challenge=String(x.counterargument||'').trim(),excerpt=String(x.excerpt||'').trim();
    const matched=excerpt.length>=12&&summarySourceNorm(body).includes(summarySourceNorm(excerpt));
-   html+='<details '+(i===0?'open ':'')+'style="border-top:1px solid var(--border,#ddd);padding:12px 0">'+
+   html+='<details '+'style="border-top:1px solid var(--border,#ddd);padding:12px 0">'+
     '<summary style="cursor:pointer"><strong>'+summarySafe(claim||'Claim '+(i+1),900)+'</strong></summary>'+
     (why?'<p><strong>How the argument works</strong><br>'+summarySafe(why,1000)+'</p>':'')+
     (evidence?'<p><strong>Evidence described in the analysis</strong><br>'+summarySafe(evidence,1200)+'</p>':'<p class="small muted">The analysis did not describe supporting evidence.</p>')+

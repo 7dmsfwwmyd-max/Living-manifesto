@@ -37,5 +37,7 @@ jobs:
             staging-validation.json
             staging-topics.png
             staging-models.png
+            staging-reading-today.png
+            staging-reading-article.png
           include-hidden-files: true
           retention-days: 30

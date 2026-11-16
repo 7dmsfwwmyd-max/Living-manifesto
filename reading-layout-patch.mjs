@@ -1,0 +1,10 @@
+import {readFile,writeFile} from 'node:fs/promises';
+let a=await readFile('dist/app.js','utf8'),w=await readFile('dist/_worker.js','utf8');
+const replace=(s,n,v)=>{if(!s.includes(n))throw Error('Reading layout anchor missing: '+n.slice(0,100));return s.replace(n,()=>v)};
+a=replace(a,'<h2 class="section-title">Extracted ideas</h2>','<details class="raw-analysis"><summary>Original extracted idea records</summary><h2 class="section-title">Extracted ideas</h2>');
+a=replace(a,'<h2 class="section-title">Proposed links</h2>','</details><h2 class="section-title">Proposed links</h2>');
+a=replace(a,'<h2>Source coverage</h2>','<h2 class="coverage-heading">Source coverage</h2>');
+a=a.replaceAll('v0.5.15','v0.5.16');
+w=replace(w,"version:'0.5.15'","version:'0.5.16'");
+await writeFile('dist/app.js',a);await writeFile('dist/_worker.js',w);
+await writeFile('dist/styles.css',(await readFile('dist/styles.css','utf8'))+'\n'+await readFile('features/reading-layout.css','utf8'));

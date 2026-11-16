@@ -249,6 +249,28 @@ try{
  console.log('PASS mobile source trash: remove, active-list exclusion, trash listing, restore and viewport fit.');
  console.log('PASS real mobile mental-model UI: starters, custom model, linked article, practice stage, personal reflection, revision history, export, search, reload persistence and viewport fit. No AI requests.');
  console.log('PASS authenticated Chromium: login, recall and reviews, learning paths, manual links, D1 cloud sync, fresh-device restore, provenance graph, backup and reload persistence. No additional AI requests; evergreen notes, verified quotations and exports passed.');
+
+ // Reading layout: real rendered CSS, mobile/desktop overflow and disclosures.
+ await evaluate('document.querySelector("[data-nav=Today]").click();true');
+ await until('!!document.querySelector(".reading-home")','focused Today layout');
+ assert.equal(await evaluate('document.querySelectorAll(".briefing-entry").length<=3'),true,'Today must start with at most three suggestions');
+ assert.equal(await evaluate('document.body.innerText.includes("These are workflow counts, not a measure of understanding.")'),false,'Duplicate dashboard still visible');
+ const todayShot=await command('Page.captureScreenshot',{format:'png'});await writeFile('staging-reading-today.png',Buffer.from(todayShot.data,'base64'));
+ await evaluate('visit('+JSON.stringify(sourceId)+')');
+ await until('!!document.querySelector(".raw-analysis")','collapsed original idea records');
+ assert.equal(await evaluate('document.querySelector(".raw-analysis").open'),false,'Secondary idea records should start collapsed');
+ const metrics=await evaluate('(()=>{const p=document.querySelector("article p")||document.querySelector(".card p");const s=getComputedStyle(p);return {font:parseFloat(s.fontSize),line:parseFloat(s.lineHeight),gap:parseFloat(s.marginBottom),overflow:document.documentElement.scrollWidth>innerWidth+1}})()');
+ assert.ok(metrics.line/metrics.font>=1.65,'Paragraph line spacing too tight');
+ assert.ok(metrics.gap>=12,'Paragraphs need visible separation');
+ assert.equal(metrics.overflow,false,'Article overflows mobile viewport');
+ await evaluate('document.querySelector(".raw-analysis summary").click();true');
+ assert.equal(await evaluate('document.querySelector(".raw-analysis").open'),true,'Original records cannot be expanded');
+ await evaluate('document.querySelector(".raw-analysis summary").click();true');
+ const articleShot=await command('Page.captureScreenshot',{format:'png'});await writeFile('staging-reading-article.png',Buffer.from(articleShot.data,'base64'));
+ await command('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false});
+ assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),true,'Desktop article overflows');
+ console.log('PASS reading layout: three initial suggestions, no duplicate dashboard, collapsed accessible records, paragraph spacing, mobile and desktop fit.',JSON.stringify(metrics));
+
 }finally{
  try{ws?.close()}catch{}
  for(const p of pending.values())p.reject(new Error('Browser session closed'));

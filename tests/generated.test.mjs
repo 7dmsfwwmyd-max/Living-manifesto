@@ -343,7 +343,7 @@ test('Daily briefing UI: escapes untrusted titles and renders independent source
 test('Health readiness: exact built Git SHA is embedded in PUBLIC health, not private briefing payload',async()=>{
  const s=await setup();
  const health=await (await s.req('health')).json();
- assert.equal(health.version,'0.5.15');
+ assert.equal(health.version,'0.5.16');
  assert.match(health.commit,/^[0-9a-f]{40}$/);
  const result=await (await s.req('briefing')).json();
  assert.equal(result.version,'0.5.8');

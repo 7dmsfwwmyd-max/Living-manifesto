@@ -12,7 +12,7 @@ test('generated Worker: auth, capture, persistence, cached dossier without AI, e
 test('generated Worker: reject incomplete AI without persisting it',async()=>{const s=await setup();s.env.CONVERTER.run=async()=>({response:'{"overview":"Only one section"}'});const {id}=await (await s.req('capture','POST',{body})).json();assert.equal((await s.req('sources/'+id+'/learning-dossier','POST',{})).status,502);assert.equal((await (await s.req('sources/'+id+'/learning-dossier')).json()).dossier,null)});
 test('generated Worker: X and PDF link extraction with controlled upstream fixtures',async()=>{const s=await setup();const old=globalThis.fetch;try{globalThis.fetch=async url=>String(url).includes('fxtwitter')?Response.json({tweet:{text:body,author:{name:'Fixture'}}}):new Response('%PDF-1.4 fixture',{headers:{'content-type':'text/plain'}});for(const url of ['https://x.com/fixture/status/12345678','https://example.com/fixture.pdf']){const {id}=await (await s.req('capture','POST',{url})).json();await Promise.all(s.pending);const saved=await (await s.req('sources/'+id)).json();assert.ok(saved.source.body.includes('Compound knowledge'));assert.notEqual(saved.source.retrieval,'pending')}}finally{globalThis.fetch=old}});
 test('generated Worker: supplied PDF analysis and duplicate preservation',async()=>{const s=await setup();const data={title:'PDF fixture',body,analysis:{summary:'Fixture summary',ideas:[{statement:'Revisit evidence',excerpt:body.slice(0,90)}],disciplines:[],proposed_principles:[],connections:[]}};const r=await s.req('analyse-file','POST',data);assert.equal(r.status,201);const {id}=await r.json();const again=await (await s.req('analyse-file','POST',data)).json();assert.equal(again.id,id);assert.equal(again.duplicate,true)});
-test('complete generated frontend boots and renders escaped dossiers',async()=>{const app={innerHTML:''};const document={getElementById:()=>app,addEventListener(){},querySelector:()=>null};const context=vm.createContext({document,navigator:{},location:{protocol:'http:'},fetch:async()=>new Response('',{status:401}),setTimeout:(fn,ms)=>setTimeout(fn,ms).unref(),clearTimeout,console,URL,localStorage:{getItem:()=>null}});vm.runInContext(readFileSync('dist/app.js','utf8'),context);await new Promise(r=>setTimeout(r,10));assert.match(app.innerHTML,/login-form/);const html=vm.runInContext(`integrated.bySource.test={overview:'<script>alert(1)</script>',reading:[]};dossierMarkup({id:'test'})`,context);assert.ok(!html.includes('<script>'));assert.ok(html.includes('&lt;script&gt;'));const topicHtml=vm.runInContext(`topics.active={topic:'<script>bad</script>',created_at:'2026-11-07',ranked:true,coverage:[],resources:[{id:'1',title:'<img src=x>',url:'https://example.org/',kind:'Web / blog',level:'Foundation',reason:'Metadata only'}]};explore()`,context);assert.ok(topicHtml.includes('topic-form'));assert.ok(!topicHtml.includes('<script>'));assert.ok(topicHtml.includes('&lt;img src=x&gt;'))});
+test('complete generated frontend boots and renders escaped dossiers',async()=>{const app={innerHTML:''};const document={getElementById:()=>app,addEventListener(){},querySelector:()=>null};const context=vm.createContext({document,navigator:{},location:{protocol:'http:'},fetch:async()=>new Response('',{status:401}),setTimeout:(fn,ms)=>setTimeout(fn,ms).unref(),clearTimeout,console,URL,localStorage:{getItem:()=>null}});vm.runInContext(readFileSync('dist/app.js','utf8'),context);await new Promise(r=>setTimeout(r,10));assert.match(app.innerHTML,/login-form/);const html=vm.runInContext(`integrated.bySource.test={overview:'<script>alert(1)</script>',reading:[]};dossierMarkup({id:'test'})`,context);assert.ok(!html.includes('<script>'));assert.ok(html.includes('&lt;script&gt;'));const topicHtml=vm.runInContext(`exploreUI.section='discover';topics.active={topic:'<script>bad</script>',created_at:'2026-11-07',ranked:true,coverage:[],resources:[{id:'1',title:'<img src=x>',url:'https://example.org/',kind:'Web / blog',level:'Foundation',reason:'Metadata only'}]};explore()`,context);assert.ok(topicHtml.includes('topic-form'));assert.ok(!topicHtml.includes('<script>'));assert.ok(topicHtml.includes('&lt;img src=x&gt;'))});
 
 test('generated Worker: AI failure preserves source and allows a later retry',async()=>{const s=await setup();const {id}=await (await s.req('capture','POST',{body})).json();const path='sources/'+id+'/learning-dossier';s.env.CONVERTER.run=async()=>{throw Error('Upstream unavailable')};assert.equal((await s.req(path,'POST',{})).status,503);assert.equal((await (await s.req(path)).json()).dossier,null);assert.equal((await (await s.req('sources/'+id)).json()).source.body,body);s.env.CONVERTER.run=async()=>({response:JSON.stringify(dossier)});assert.equal((await s.req(path,'POST',{})).status,200);assert.equal((await (await s.req(path)).json()).dossier.overview,dossier.overview)});
 
@@ -343,7 +343,7 @@ test('Daily briefing UI: escapes untrusted titles and renders independent source
 test('Health readiness: exact built Git SHA is embedded in PUBLIC health, not private briefing payload',async()=>{
  const s=await setup();
  const health=await (await s.req('health')).json();
- assert.equal(health.version,'0.5.16');
+ assert.equal(health.version,'0.5.17');
  assert.match(health.commit,/^[0-9a-f]{40}$/);
  const result=await (await s.req('briefing')).json();
  assert.equal(result.version,'0.5.8');
@@ -662,4 +662,23 @@ test('Trash UI: escaped read-only removed source and reversible controls',async(
  vm.runInContext(readFileSync('dist/app.js','utf8'),context);await new Promise(r=>setTimeout(r,10));
  const html=vm.runInContext(`state.detail={source:{id:'test',title:'<script>bad</script>',body:'<img src=x>',trashed_at:'2026-11-15'}};detail()`,context);
  assert.match(html,/Restore to library/);assert.ok(!html.includes('<script>'));assert.ok(!html.includes('Add or replace'));assert.ok(!html.includes('data-research-generate'));
+});
+
+
+test('Explore flow: focused views, retained drafts and concept deep links',async()=>{
+ const listeners=[],app={innerHTML:''};
+ const document={getElementById:()=>app,addEventListener:(type,fn,capture)=>listeners.push({type,fn,capture}),querySelector:()=>null};
+ const context=vm.createContext({document,navigator:{},location:{protocol:'http:'},fetch:async()=>new Response('',{status:401}),setTimeout:(fn,ms)=>setTimeout(fn,ms).unref(),clearTimeout,console,URL,localStorage:{getItem:()=>null}});
+ vm.runInContext(readFileSync('dist/app.js','utf8'),context);await new Promise(r=>setTimeout(r,10));
+ const run=s=>vm.runInContext(s,context);
+ run("knowledge.loaded=true;knowledge.draft=ktBlank();knowledge.draft.title='Draft question';knowledge.dirty=true");
+ let html=run('explore()');assert.ok(html.includes('Draft question'));assert.ok(!html.includes('topic-form'));assert.ok(!html.includes('data-ev-new'));
+ const route=listeners.find(x=>x.type==='click'&&x.capture).fn;
+ route({target:{closest:()=>({dataset:{exploreView:'discover'}})}});
+ assert.ok(run('explore()').includes('topic-form'));assert.equal(run('knowledge.draft.title'),'Draft question');
+ route({target:{closest:()=>({dataset:{exploreView:'topics'}})}});
+ assert.ok(run('explore()').includes('Draft question'));
+ route({target:{closest:()=>({dataset:{evOpen:'concept-id'}})}});
+ assert.equal(run('exploreUI.section'),'tools');assert.equal(run('exploreUI.tool'),'concepts');
+ assert.ok(run('explore()').includes('data-ev-new'));assert.ok(!run('explore()').includes('kt-editor'));
 });

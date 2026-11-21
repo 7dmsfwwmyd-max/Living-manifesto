@@ -137,8 +137,11 @@ try{
  assert.equal(await evaluate('studioLoad().reviews['+JSON.stringify(sourceId)+']?.some(x=>x.answer==='+JSON.stringify(answer)+')'),true,'Cloud state not restored in a fresh device context');
  const exploreNav=await evaluate('(()=>{const n=document.querySelector("[data-nav=Explore]");if(!n)return false;n.click();return true})()');
  assert.equal(exploreNav,true,'Explore navigation was not available');
+ assert.equal(await evaluate('!!document.querySelector("[data-kt-new]") && !document.querySelector("#topic-form") && !document.querySelector("[data-ev-new]")'),true,'Explore should start with topics only');
+ await evaluate('document.querySelector("[data-explore-view=tools]").click();document.getElementById("explore-tool").value="learning";document.getElementById("explore-tool").dispatchEvent(new Event("change",{bubbles:true}));true');
  await until('document.body.innerText.includes("Your knowledge graph")&&!!document.querySelector("[data-studio-cloud-sync]")','rendered knowledge graph viewer');
 
+ await evaluate('document.getElementById("explore-tool").value="concepts";document.getElementById("explore-tool").dispatchEvent(new Event("change",{bubbles:true}));true');
  // Create an authored evergreen note in the real UI, cite exact saved text, and
  // verify the D1 record and portable export are available after fresh login.
  await until('evergreen.loaded && !evergreen.busy && !!document.querySelector("[data-ev-new]")','Evergreen index ready in Explore');
@@ -163,6 +166,7 @@ try{
  await until('evergreen.active?.source_refs?.length===1','authentic cited source saved');
  const evergreenCheck=await evaluate('(async()=>{const x=await api("evergreen/'+conceptId+'");const r=await fetch("/api/evergreen/export?format=markdown");const md=await r.text();const h=await api("evergreen/'+conceptId+'/history");return {revision:x.note.revision,refs:x.note.source_refs.length,quote:x.note.source_refs[0].quote,download:r.status,md:md.includes("Evidence foundations"),history:h.history.length}})()');
  assert.ok(evergreenCheck.revision>=2&&evergreenCheck.refs===1&&evergreenCheck.quote===sourceText&&evergreenCheck.download===200&&evergreenCheck.md&&evergreenCheck.history>=1,'Evergreen source provenance, revision history or export failed');
+ await evaluate('document.querySelector("[data-explore-view=topics]").click();true');
  // Topic workspaces: create through the UI, retain a draft across rerenders,
  // attach an existing synthetic source and read earlier authored views.
  await until('knowledge.loaded && !knowledge.loading && !knowledge.busy','Topic index ready');
@@ -179,7 +183,7 @@ try{
  }
  const topicId=await evaluate('knowledge.active.id');
  if(!await evaluate('knowledge.active.source_refs.some(x=>x.source_id==='+JSON.stringify(sourceId)+')')){
-  await evaluate('(()=>{const f=document.getElementById("kt-attach");f.querySelector("[name=source_id]").value='+JSON.stringify(sourceId)+';f.querySelector("[name=relation]").value="challenges";f.querySelector("[name=rationale]").value="This source tests the assumptions behind my view.";f.requestSubmit();return true})()');
+  await evaluate('(()=>{document.querySelector(".topic-attachment").open=true;const f=document.getElementById("kt-attach");f.querySelector("[name=source_id]").value='+JSON.stringify(sourceId)+';f.querySelector("[name=relation]").value="challenges";f.querySelector("[name=rationale]").value="This source tests the assumptions behind my view.";f.requestSubmit();return true})()');
   await until('knowledge.active.source_refs.some(x=>x.source_id==='+JSON.stringify(sourceId)+') && !knowledge.busy','Source attached to topic');
  }
  const previousView=await evaluate('knowledge.active.current_view');
@@ -194,7 +198,15 @@ try{
  const topicCheck=await evaluate('(async()=>{const p=await api("knowledge-topics/'+topicId+'");const b=await api("export");return {view:p.topic.current_view,confidence:p.topic.confidence,source:p.sources.some(s=>s.source_id==='+JSON.stringify(sourceId)+'&&!s.quality.complete_verified),exported:b.knowledge_topics.some(t=>t.id==='+JSON.stringify(topicId)+'),history:b.knowledge_topic_history.some(t=>t.topic_id==='+JSON.stringify(topicId)+')}})()');
  assert.equal(topicCheck.view,revisedView);assert.equal(topicCheck.confidence,'low');assert.ok(topicCheck.source&&topicCheck.exported&&topicCheck.history,'Topic coverage or backup missing');
  await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
- await evaluate('knowledge.history=null;render();document.querySelector("[data-kt-new]").closest("article").scrollIntoView();true');
+ await evaluate('knowledge.history=null;render();document.querySelector(".explore-workspace").scrollIntoView();true');
+ assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,'Explore topic overflows mobile viewport');
+ await evaluate('document.querySelector("[data-explore-discover]").click();true');
+ assert.equal(await evaluate('document.getElementById("topic-query").value'),topicName,'Topic must carry into resource discovery');
+ assert.equal(await evaluate('!!document.querySelector("[data-kt-edit]")'),false,'Only one workspace should be visible');
+ await evaluate('document.getElementById("topic-query").value="Independent evidence";document.getElementById("topic-query").dispatchEvent(new Event("input",{bubbles:true}));document.querySelector("[data-explore-view=topics]").click();document.querySelector("[data-explore-view=discover]").click();true');
+ assert.equal(await evaluate('document.getElementById("topic-query").value'),'Independent evidence','Search draft lost switching views');
+ await evaluate('document.querySelector("[data-explore-view=topics]").click();document.querySelector("[data-explore-topics]").click();true');
+ assert.equal(await evaluate('!!document.querySelector("[data-kt-new]")&&!document.querySelector("#kt-attach")'),true,'Return to topic index');
  const topicScreenshot=await command('Page.captureScreenshot',{format:'png'});
  await writeFile('staging-topics.png',Buffer.from(topicScreenshot.data,'base64'));
  console.log('PASS real topic UI: draft retention, source classification, revised confidence, readable history and private export; no AI calls.');

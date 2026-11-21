@@ -138,7 +138,7 @@ try{
  const exploreNav=await evaluate('(()=>{const n=document.querySelector("[data-nav=Explore]");if(!n)return false;n.click();return true})()');
  assert.equal(exploreNav,true,'Explore navigation was not available');
  assert.equal(await evaluate('!!document.querySelector("[data-kt-new]") && !document.querySelector("#topic-form") && !document.querySelector("[data-ev-new]")'),true,'Explore should start with topics only');
- await evaluate('document.querySelector("[data-explore-view=tools]").click();document.getElementById("explore-tool").value="learning";document.getElementById("explore-tool").dispatchEvent(new Event("change",{bubbles:true}));true');
+ await evaluate('document.querySelector("[data-explore-view=tools]").click();document.getElementById("explore-tool").value="connections";document.getElementById("explore-tool").dispatchEvent(new Event("change",{bubbles:true}));true');
  await until('document.body.innerText.includes("Your knowledge graph")&&!!document.querySelector("[data-studio-cloud-sync]")','rendered knowledge graph viewer');
 
  await evaluate('document.getElementById("explore-tool").value="concepts";document.getElementById("explore-tool").dispatchEvent(new Event("change",{bubbles:true}));true');

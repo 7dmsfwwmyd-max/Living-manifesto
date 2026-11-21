@@ -3,6 +3,9 @@ let a=await readFile('dist/app.js','utf8'),w=await readFile('dist/_worker.js','u
 const anchor='function explore(){return knowledgeMarkup()+evidenceOverviewMarkup()+evergreenMarkup()+topicMarkup()+studioOverview()+exploreConnections()}';
 if(!a.includes(anchor))throw Error('Explore composition changed; review before replacing');
 a=a.replace(anchor,'function explore(){return exploreWorkspace()}');
+const studio='studioOverview=function(){return graphMarkup()+studioOverviewOriginal()};';
+if(!a.includes(studio))throw Error('Learning graph composition changed');
+a=a.replace(studio,'studioOverview=function(){return studioOverviewOriginal()};');
 a+='\n'+await readFile('features/explore-flow-app.js','utf8');
 a=a.replaceAll('v0.5.16','v0.5.17');
 if(!w.includes("version:'0.5.16'"))throw Error('Expected prior release');

@@ -7,7 +7,7 @@ function exploreWorkspace(){
  else if(exploreUI.section==='discover')h+=topicMarkup();
  else{
  h+='<div class="explore-tools"><label for="explore-tool">Work with your saved knowledge</label><select class="input" id="explore-tool">'+tools.map(([id,label])=>'<option value="'+id+'"'+(exploreUI.tool===id?' selected':'')+'>'+label+'</option>').join('')+'</select><p class="small muted">Keep reusable ideas, revisit learning and examine the connections behind your thinking.</p></div>';
- h+=exploreUI.tool==='concepts'?evergreenMarkup():exploreUI.tool==='learning'?studioOverview():exploreUI.tool==='connections'?exploreConnections():evidenceOverviewMarkup();
+ h+=exploreUI.tool==='concepts'?evergreenMarkup():exploreUI.tool==='learning'?studioOverview():exploreUI.tool==='connections'?graphMarkup()+'<details><summary>AI-proposed relationships and themes</summary>'+exploreConnections()+'</details>':evidenceOverviewMarkup();
  }
  return h+'</section>';
 }

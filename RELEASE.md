@@ -243,3 +243,14 @@ Today now shows one briefing with three initial suggestions and an explicit show
 Release commit `536a97c1e8d5015cc0fec3d6e93131bc750e1b1f` passed [staging 43955205182](https://github.com/7dmsfwwmyd-max/Living-manifesto/actions/runs/43955205182): 54 generated tests and authenticated Chromium regression checks, plus three-suggestion/default disclosure assertions and mobile/desktop overflow checks. The measured secondary paragraph had 13px font, 23.4px line height and 14.95px paragraph gap. Mobile screenshots `staging-reading-today.png` and `staging-reading-article.png` are retained in the staging artifact. Screenshots were captured by CI; no independent visual inspection or owner's iPhone check is claimed.
 
 [Production promotion 43955744201](https://github.com/7dmsfwwmyd-max/Living-manifesto/actions/runs/43955744201) passed exact asset hashes, health, anonymous access denial, original bindings and unchanged stored-data fingerprints. The temporary release trigger was removed after success; manual staging-validated promotion is restored. Authenticated production visual checks were unavailable in this session; staging browser validation and the production release gate passed.
+
+
+## v0.5.17 — Explore flow (2026-11-21)
+
+Explore now starts with saved topics. Resource discovery and knowledge tools are separate views; only the selected workspace renders. Topic cards open one workspace, All topics returns to the index, source attachment is disclosed on demand, and contextual discovery carries over the topic title. Topic and search drafts survive view changes. Concept links route to concept notes. Connections owns the knowledge graph; AI-proposed relationships are expandable. Learning opens directly onto reviews and paths.
+
+- Validated source: `4eb15ff8eee5b57b1884e7ac35746908412f864a`.
+- Staging run: 44910219707; 55 generated tests passed plus authenticated Chromium topic create/revise/history/export, source attachment, draft retention, contextual discovery, mobile fit, and existing reading/model/trash regressions. Mobile screenshot inspected.
+- Production promotion: 44910474669; Worker `37cb60f9-ec51-4f11-b58f-398a6aae9312`. Exact asset hashes, authentication, original bindings and unchanged database fingerprints passed. One-shot promotion trigger removed afterward.
+- Authenticated production browser confirmed the focused topic landing, resource discovery, concept tools and learning paths view. No production records were edited for this UI check.
+- No schema changes or new paid dependencies. Existing ingestion and discovery limitations remain: staging reported unavailable web/YouTube/X/PDF search providers, with reference and scholarly results available. Previously generated synthetic AI output was reused where indicated by existing E2E checks; this release changes presentation, not inference quality.
